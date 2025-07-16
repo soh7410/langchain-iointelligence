@@ -1,0 +1,12 @@
+# Production dependencies
+langchain>=0.1.0
+requests>=2.25.0
+python-dotenv>=1.0.1
+
+# Development dependencies
+pytest>=8.3.4
+pytest-cov>=2.0
+black>=22.0
+flake8>=4.0
+mypy>=0.910
+twine>=4.0

@@ -1,0 +1,17 @@
+# ~/.pypirc ファイルの作成例
+# このファイルをホームディレクトリに作成すると、認証情報を保存できます
+
+[distutils]
+index-servers =
+    pypi
+    testpypi
+
+[pypi]
+repository = https://upload.pypi.org/legacy/
+username = __token__
+password = your_pypi_api_token
+
+[testpypi]
+repository = https://test.pypi.org/legacy/
+username = __token__
+password = your_testpypi_api_token
