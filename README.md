@@ -385,7 +385,7 @@ for model in models:
 
 ```bash
 # Clone repository
-git clone https://github.com/sou-co/langchain-iointelligence.git
+git clone https://github.com/soh7410/langchain-iointelligence.git
 cd langchain-iointelligence
 
 # Install in development mode
@@ -457,8 +457,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 📧 Support
 
-- **Issues**: [GitHub Issues](https://github.com/sou-co/langchain-iointelligence/issues)
-- **Documentation**: [GitHub Wiki](https://github.com/sou-co/langchain-iointelligence/wiki)
+- **Issues**: [GitHub Issues](https://github.com/soh7410/langchain-iointelligence/issues)
+- **Documentation**: [GitHub Wiki](https://github.com/soh7410/langchain-iointelligence/wiki)
 - **Examples**: See `examples/` directory
 
 ---
