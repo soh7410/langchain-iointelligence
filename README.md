@@ -15,13 +15,15 @@
 | ✅ **Text LLM** | **Fully Supported** | Traditional prompt-response interface |
 | ✅ **Sync Generation** | **Fully Supported** | Standard text generation with token usage tracking |
 | ✅ **Error Handling** | **Production Ready** | Comprehensive error classification and retry logic |
-| ✅ **Token Usage** | **Fully Supported** | Input/output/total token tracking with LangChain compatibility |
-| ⚠️ **Streaming** | **Partial Support** | Basic streaming available, full SSE implementation in progress |
+| ✅ **Token Usage** | **Fully Supported** | `response.usage_metadata` access (0.2.1+) |
+| ⚠️ **Streaming** | **Basic Support** | SSE token chunks; usage-at-end *coming soon* |
 | ❌ **Function/Tool Calling** | **Not Supported** | Planned for future release |
 | ❌ **Vision/Multimodal** | **Not Supported** | Text-only interface currently |
 | ❌ **Embeddings** | **Not Supported** | Use dedicated embedding providers |
 
-**Production-ready LangChain wrapper** for io Intelligence LLM API with **complete ChatGPT API compatibility**. Features both traditional Text LLM and modern Chat Model interfaces with advanced error handling, streaming support, and seamless provider switching.
+> **Note**: Non-core message roles default to `user`. Usage metadata always includes all required fields (`input_tokens`, `output_tokens`, `total_tokens`) with defaults of 0 when data unavailable.
+
+**LangChain-compatible wrapper** for io Intelligence LLM API with **OpenAI-compatible interface**. Features both traditional Text LLM and modern Chat Model interfaces with comprehensive error handling, token usage tracking, and streaming support.
 
 ## 🚀 Key Features
 
@@ -69,7 +71,7 @@ chat = IOIntelligenceChat(
 messages = [HumanMessage(content="Explain quantum computing")]
 response = chat.invoke(messages)
 print(response.content)  # AIMessage content
-print(response.usage_metadata)  # Token usage info
+print(response.usage_metadata)  # Token usage: input_tokens, output_tokens, total_tokens
 ```
 
 ### **Streaming Responses**

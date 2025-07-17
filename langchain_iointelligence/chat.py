@@ -222,27 +222,34 @@ class IOIntelligenceChatModel(BaseChatModel):
                 )
 
             # Create AIMessage with the response
-            message = AIMessage(content=content)
-
-            # Extract usage information if available
-            usage_data = response_data.get("usage", {})
+            raw_usage = response_data.get("usage", {})
             
-            # Map usage data to LangChain standard format
-            usage_metadata = {}
-            if usage_data:
-                # Standard LangChain usage_metadata mapping
-                if "prompt_tokens" in usage_data:
-                    usage_metadata["input_tokens"] = usage_data["prompt_tokens"]
-                if "completion_tokens" in usage_data:
-                    usage_metadata["output_tokens"] = usage_data["completion_tokens"]
-                if "total_tokens" in usage_data:
-                    usage_metadata["total_tokens"] = usage_data["total_tokens"]
+            # Map usage data to LangChain standard format for usage_metadata
+            # All fields are required by LangChain's Pydantic model
+            usage_metadata = {
+                "input_tokens": raw_usage.get("prompt_tokens", 0),
+                "output_tokens": raw_usage.get("completion_tokens", 0),
+                "total_tokens": raw_usage.get("total_tokens", 0),
+            }
+            
+            # Create AIMessage with usage_metadata properly set
+            message = AIMessage(
+                content=content,
+                usage_metadata=usage_metadata,
+                response_metadata={
+                    "token_usage": raw_usage,
+                    "model_name": self.model,
+                    "finish_reason": choice.get("finish_reason"),
+                    "id": response_data.get("id"),
+                    "created": response_data.get("created"),
+                },
+            )
 
             generation = ChatGeneration(
                 message=message,
                 generation_info={
                     "model": self.model,
-                    "usage": usage_data,
+                    "usage": raw_usage,
                     "finish_reason": choice.get("finish_reason"),
                     "response_id": response_data.get("id"),
                     "created": response_data.get("created"),

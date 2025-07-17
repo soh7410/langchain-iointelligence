@@ -12,7 +12,7 @@ class TestUsageMetadata:
     """Test usage metadata mapping."""
 
     def test_usage_metadata_mapping(self):
-        """Test that usage data is correctly mapped to LangChain standard format."""
+        """Test that usage data is correctly mapped to AIMessage.usage_metadata."""
         chat = IOIntelligenceChatModel(
             api_key="test_key",
             api_url="https://test.api.com/v1/chat/completions"
@@ -36,13 +36,17 @@ class TestUsageMetadata:
             messages = [HumanMessage(content="Test message")]
             result = chat._generate(messages)
 
-            # Check that usage metadata is correctly mapped
-            assert "token_usage" in result.llm_output
-            usage = result.llm_output["token_usage"]
+            # Check that usage_metadata is correctly set on AIMessage
+            ai_message = result.generations[0].message
+            assert hasattr(ai_message, 'usage_metadata')
+            assert ai_message.usage_metadata["input_tokens"] == 10
+            assert ai_message.usage_metadata["output_tokens"] == 20
+            assert ai_message.usage_metadata["total_tokens"] == 30
             
-            assert usage["input_tokens"] == 10
-            assert usage["output_tokens"] == 20
-            assert usage["total_tokens"] == 30
+            # Check response_metadata
+            assert hasattr(ai_message, 'response_metadata')
+            assert ai_message.response_metadata["token_usage"]["prompt_tokens"] == 10
+            assert ai_message.response_metadata["model_name"] == "meta-llama/Llama-3.3-70B-Instruct"
 
     def test_usage_metadata_partial_data(self):
         """Test usage metadata mapping with partial data."""
@@ -68,11 +72,11 @@ class TestUsageMetadata:
             messages = [HumanMessage(content="Test message")]
             result = chat._generate(messages)
 
-            # Check that only available usage data is mapped
-            usage = result.llm_output["token_usage"]
-            assert usage["total_tokens"] == 30
-            assert "input_tokens" not in usage
-            assert "output_tokens" not in usage
+            # Check that only available usage data is mapped, others default to 0
+            ai_message = result.generations[0].message
+            assert ai_message.usage_metadata["total_tokens"] == 30
+            assert ai_message.usage_metadata["input_tokens"] == 0  # Default when missing
+            assert ai_message.usage_metadata["output_tokens"] == 0  # Default when missing
 
     def test_usage_metadata_no_usage_data(self):
         """Test usage metadata when no usage data is provided."""
@@ -95,9 +99,11 @@ class TestUsageMetadata:
             messages = [HumanMessage(content="Test message")]
             result = chat._generate(messages)
 
-            # Check that token_usage is empty when no usage data
-            usage = result.llm_output["token_usage"]
-            assert usage == {}
+            # Check that usage_metadata defaults to 0 when no usage data
+            ai_message = result.generations[0].message
+            assert ai_message.usage_metadata["input_tokens"] == 0
+            assert ai_message.usage_metadata["output_tokens"] == 0
+            assert ai_message.usage_metadata["total_tokens"] == 0
 
 
 if __name__ == "__main__":

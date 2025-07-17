@@ -106,6 +106,11 @@ class TestIOIntelligenceChatModel:
             assert generation.message.content == "This is a test response"
             assert generation.generation_info["finish_reason"] == "stop"
             assert generation.generation_info["usage"]["total_tokens"] == 15
+            
+            # Check usage_metadata is properly set
+            assert generation.message.usage_metadata["input_tokens"] == 10
+            assert generation.message.usage_metadata["output_tokens"] == 5
+            assert generation.message.usage_metadata["total_tokens"] == 15
 
             # Verify API call was made correctly
             mock_client.post_with_retry.assert_called_once()
