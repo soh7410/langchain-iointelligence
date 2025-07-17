@@ -97,7 +97,7 @@ python -m twine upload dist/*
 ### バージョン更新
 ```bash
 # setup.pyとpyproject.tomlのバージョンを更新
-# 例: 0.1.0 → 0.1.1
+# 例: 0.2.0 → 0.2.1
 
 # 再ビルド・再公開
 python -m build

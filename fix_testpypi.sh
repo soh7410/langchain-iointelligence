@@ -1,11 +1,21 @@
+#!/bin/bash
+# Fix package for Test PyPI upload
+
+echo "🔧 Fixing package for Test PyPI upload..."
+
+# Create a backup of original pyproject.toml
+cp pyproject.toml pyproject.toml.backup
+
+# Create test version with unique name
+cat > pyproject.toml << 'EOF'
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "langchain-iointelligence"
-version = "0.2.0"
-description = "LangChain integration for io Intelligence LLM API with OpenAI compatibility"
+name = "langchain-iointelligence-testpkg"
+version = "0.1.0"
+description = "LangChain integration for io Intelligence LLM API with OpenAI compatibility (Test Package)"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
@@ -77,3 +87,29 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning"
 ]
+EOF
+
+echo "✅ Created test package configuration"
+
+# Clean and rebuild
+echo "🧹 Cleaning previous build..."
+rm -rf dist/ build/ *.egg-info/
+
+echo "📦 Rebuilding package..."
+python -m build
+
+if [ $? -eq 0 ]; then
+    echo "✅ Package rebuilt successfully!"
+    echo ""
+    echo "📋 New package contents:"
+    ls -la dist/
+    echo ""
+    echo "🚀 Now try uploading again:"
+    echo "   chmod +x debug_upload.sh"
+    echo "   ./debug_upload.sh"
+else
+    echo "❌ Rebuild failed!"
+    # Restore original
+    mv pyproject.toml.backup pyproject.toml
+    exit 1
+fi

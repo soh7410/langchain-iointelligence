@@ -15,7 +15,7 @@
 | ✅ **Text LLM** | **Fully Supported** | Traditional prompt-response interface |
 | ✅ **Sync Generation** | **Fully Supported** | Standard text generation with token usage tracking |
 | ✅ **Error Handling** | **Production Ready** | Comprehensive error classification and retry logic |
-| ✅ **Token Usage** | **Fully Supported** | `response.usage_metadata` access (0.2.1+) |
+| ✅ **Token Usage** | **Fully Supported** | `response.usage_metadata` access (0.2.0+) |
 | ⚠️ **Streaming** | **Basic Support** | SSE token chunks; usage-at-end *coming soon* |
 | ❌ **Function/Tool Calling** | **Not Supported** | Planned for future release |
 | ❌ **Vision/Multimodal** | **Not Supported** | Text-only interface currently |
