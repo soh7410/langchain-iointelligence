@@ -177,6 +177,23 @@ simple_test.py
 test_complete_solution.py
 test_refactoring.py
 verify_basic.py
+check_flake8.py
+quick_fix_test.py
+quick_test.py
+test_critical_fixes.sh
+test_demo_fix.sh
+test_final_mvp.sh
+test_new_lint_config.sh
+test_production_readiness.sh
+lint_and_test.sh
+
+# Temporary documentation/notes
+COMMIT_MESSAGE.md
+LINT_OPTIONS.md
+PUSH_CHECKLIST.md
+
+# Alternative configurations
+.flake8.ultra-relaxed
 
 # Environment setup scripts (temporary) 
 check_test_environment.sh
