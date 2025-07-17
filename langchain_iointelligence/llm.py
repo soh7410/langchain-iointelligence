@@ -103,13 +103,23 @@ class IOIntelligenceLLM(LLM):
             )
             response.raise_for_status()
             
-            # Parse OpenAI-compatible response
+            # Parse response - supports both Chat and Completion formats
             response_data = response.json()
             
             if "choices" not in response_data or not response_data["choices"]:
                 raise GenerationError("No choices in API response")
                 
-            return response_data["choices"][0]["message"]["content"]
+            choice = response_data["choices"][0]
+            
+            # Chat format: choices[0].message.content
+            if "message" in choice and "content" in choice["message"]:
+                return choice["message"]["content"]
+            
+            # Completion format: choices[0].text
+            if "text" in choice:
+                return choice["text"]
+                
+            raise GenerationError("Unsupported response schema - expected 'message.content' or 'text' in choices")
             
         except requests.exceptions.RequestException as e:
             raise GenerationError(f"API request failed: {str(e)}")

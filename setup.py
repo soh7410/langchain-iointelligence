@@ -7,13 +7,13 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="langchain-iointelligence",
-    version="0.1.1.2141",
-    author="Your Name",
-    author_email="your.email@example.com",
+    version="0.2.0",
+    author="Sou-Co",
+    author_email="contact@sou-co.jp",
     description="LangChain wrapper for io Intelligence LLM API",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/langchain-iointelligence",
+    url="https://github.com/sou-co/langchain-iointelligence",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -46,7 +46,7 @@ setup(
     },
     keywords="langchain llm ai io-intelligence api-wrapper",
     project_urls={
-        "Bug Reports": "https://github.com/yourusername/langchain-iointelligence/issues",
-        "Source": "https://github.com/yourusername/langchain-iointelligence",
+        "Bug Reports": "https://github.com/sou-co/langchain-iointelligence/issues",
+        "Source": "https://github.com/sou-co/langchain-iointelligence",
     },
 )

@@ -7,27 +7,28 @@
 
 > **📦 [Available on PyPI](https://pypi.org/project/langchain-iointelligence/)** - Install with `pip install langchain-iointelligence`
 
-A lightweight wrapper for using io Intelligence LLM API with LangChain. Provides `IOIntelligenceLLM` that inherits from `BaseLLM` and integrates seamlessly with LangChain chains and agents.
+A modern LangChain wrapper for io Intelligence LLM API with both **Text LLM** and **Chat Model** support. Provides seamless integration with LangChain's ecosystem including chains, agents, and prompt templates.
 
 ## 🚀 Features
 
-* Compatible with LangChain standard components like `LLMChain`, `Agent`, `PromptTemplate`
-* Environment variable management via `.env` files (easy dev/prod switching)
-* OpenAI-compatible API format support (`prompt`, `model`, `max_tokens`, etc.)
+* **Dual Interface Support**: Both `IOIntelligenceLLM` (text-based) and `IOIntelligenceChatModel` (message-based)
+* **Modern LangChain Compatibility**: Full support for `prompt | llm | parser` chains and `AIMessage` responses
+* **OpenAI-Compatible API**: Supports both Chat (`messages`) and Completion (`prompt`) API formats
+* **Runtime Configuration**: Easy provider switching with `configurable_alternatives()`
+* **Fallback Support**: Robust error handling with `.with_fallbacks()` for production use
+* **Environment Variable Management**: Seamless dev/prod switching via `.env` files
 
-## 🧱 Directory Structure
+## 🧱 Architecture
 
 ```
 langchain-iointelligence/
 ├── langchain_iointelligence/
 │   ├── __init__.py
-│   └── llm.py                    # IOIntelligenceLLM implementation
-├── .env.example                  # IO_API_KEY, IO_API_URL template
-├── setup.py
-├── pyproject.toml
-├── README.md
-└── tests/
-    └── test_llm.py              # Test code for functionality verification
+│   ├── llm.py                    # IOIntelligenceLLM (BaseLLM)
+│   └── chat.py                   # IOIntelligenceChatModel (BaseChatModel)
+├── examples/                     # Usage examples
+├── tests/                        # Test suites
+└── README.md
 ```
 
 ## ⚙️ Installation
@@ -36,157 +37,326 @@ langchain-iointelligence/
 pip install langchain-iointelligence
 ```
 
-Or for local development:
-
+For development:
 ```bash
-pip install -e .
+git clone https://github.com/yourusername/langchain-iointelligence.git
+cd langchain-iointelligence
+pip install -e ".[dev]"
 ```
 
-## 🔐 Environment Variables Setup (`.env`)
+## 🔐 Environment Setup
+
+Create a `.env` file:
 
 ```env
 IO_API_KEY=your_api_key_here
 IO_API_URL=https://api.intelligence.io.solutions/api/v1/chat/completions
 ```
 
-## 🧪 Usage Examples (Direct Call)
+## 🎯 Quick Start
+
+### Modern Chat Model (Recommended)
 
 ```python
-from langchain_iointelligence.llm import IOIntelligenceLLM
+from langchain_iointelligence import IOIntelligenceChat
+from langchain_core.messages import HumanMessage
 
-# Direct API configuration
-llm = IOIntelligenceLLM(
-    api_key="your_api_key_here",
-    api_url="https://api.intelligence.io.solutions/api/v1/chat/completions"
+# Initialize chat model
+chat = IOIntelligenceChat(
+    model="meta-llama/Llama-3.3-70B-Instruct",
+    temperature=0.7,
+    max_tokens=1000
 )
 
-# Or use environment variables (if configured in .env file)
-llm = IOIntelligenceLLM()
-
-# Modern usage (recommended)
-response = llm.invoke("Tell me a fun fact about koalas.")
-print(response)
-
-# Legacy usage (deprecated but functional)
-response = llm("Tell me a fun fact about koalas.")
-print(response)
+# Direct usage
+messages = [HumanMessage(content="Tell me about quantum computing")]
+response = chat.invoke(messages)
+print(response.content)  # AIMessage content
 ```
 
-## 🔄 LangChain Chain Usage Examples
-
-### Modern Approach (Recommended)
+### Text LLM (Legacy Support)
 
 ```python
-from langchain_core.prompts import PromptTemplate
-from langchain_iointelligence.llm import IOIntelligenceLLM
+from langchain_iointelligence import IOIntelligenceLLM
 
-prompt_template = PromptTemplate.from_template("Tell me a joke about {topic}")
 llm = IOIntelligenceLLM()
-
-# Modern approach: prompt | llm
-chain = prompt_template | llm
-result = chain.invoke({"topic": "robots"})
-print(result)
+response = llm.invoke("Tell me about quantum computing")
+print(response)  # String response
 ```
 
-### Legacy Approach (Deprecated but Functional)
+## 🔗 LangChain Integration Examples
+
+### Modern Chain with Chat Model
 
 ```python
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
-from langchain_iointelligence.llm import IOIntelligenceLLM
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_iointelligence import IOIntelligenceChat
 
-prompt = PromptTemplate.from_template("Tell me a joke about {topic}")
-llm = IOIntelligenceLLM()
-chain = LLMChain(llm=llm, prompt=prompt)
-print(chain.run("robots"))
+# Create prompt template
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful AI assistant."),
+    ("human", "Tell me a {adjective} joke about {topic}")
+])
+
+# Initialize chat model
+chat = IOIntelligenceChat()
+
+# Modern chain: prompt | chat
+chain = prompt | chat
+result = chain.invoke({"adjective": "funny", "topic": "robots"})
+print(result.content)
 ```
 
-## 🛠️ Customization Examples
+### Runtime Provider Switching
 
 ```python
-from langchain_iointelligence.llm import IOIntelligenceLLM
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+from langchain_iointelligence import IOIntelligenceChat
 
-# Customize parameters
-llm = IOIntelligenceLLM(
-    model="meta-llama/Llama-3.3-70B-Instruct",  # Main model
-    max_tokens=500,
-    temperature=0.3
+# Configure multiple providers
+chat_io = IOIntelligenceChat()
+chat_openai = ChatOpenAI()
+chat_anthropic = ChatAnthropic()
+
+# Runtime switching
+configurable_chat = chat_openai.configurable_alternatives(
+    which="provider",
+    default_key="openai",
+    iointelligence=chat_io,
+    anthropic=chat_anthropic,
 )
 
-# Other available models (see io Intelligence documentation for details)
-# - meta-llama/Llama-3.3-70B-Instruct
-# - Check API documentation for other models
-
-response = llm.invoke("Explain quantum computing in simple terms.")
-print(response)
+# Use with config
+response = configurable_chat.invoke(
+    "Hello, world!",
+    config={"configurable": {"provider": "iointelligence"}}
+)
 ```
 
-## 🧼 API Response Format
+### Fallback Configuration
 
-io Intelligence API requires `OpenAI`-compatible JSON structure:
+```python
+from langchain_openai import ChatOpenAI
+from langchain_iointelligence import IOIntelligenceChat
 
+# Primary and fallback models
+primary = IOIntelligenceChat()
+fallback = ChatOpenAI()
+
+# Chain with fallback
+reliable_chat = primary.with_fallbacks([fallback])
+
+# Automatically switches on failure
+response = reliable_chat.invoke("Explain machine learning")
+```
+
+### Advanced Chain with Output Parser
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_iointelligence import IOIntelligenceChat
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "Respond in exactly 50 words"),
+    ("human", "{question}")
+])
+
+chat = IOIntelligenceChat(temperature=0.3)
+parser = StrOutputParser()
+
+# Complete chain
+chain = prompt | chat | parser
+
+result = chain.invoke({"question": "What is artificial intelligence?"})
+print(result)  # Clean string output
+```
+
+## 🎛️ Configuration Options
+
+### Chat Model Parameters
+
+```python
+from langchain_iointelligence import IOIntelligenceChat
+
+chat = IOIntelligenceChat(
+    # API Configuration
+    api_key="your_key",                           # or use IO_API_KEY env var
+    api_url="https://api.example.com/v1/chat",    # or use IO_API_URL env var
+    
+    # Model Parameters
+    model="meta-llama/Llama-3.3-70B-Instruct",   # Model name
+    temperature=0.7,                              # Creativity (0.0-2.0)
+    max_tokens=2000,                              # Response length
+    timeout=30,                                   # Request timeout
+    max_retries=3,                                # Retry attempts
+)
+```
+
+### Text LLM Parameters
+
+```python
+from langchain_iointelligence import IOIntelligenceLLM
+
+llm = IOIntelligenceLLM(
+    api_key="your_key",
+    api_url="https://api.example.com/v1/chat",
+    model="meta-llama/Llama-3.3-70B-Instruct",
+    temperature=0.5,
+    max_tokens=1500,
+)
+```
+
+## 🔌 API Compatibility
+
+This library supports both OpenAI-compatible API formats:
+
+**Chat Completion Format (Default):**
 ```json
 {
-  "choices": [
-    {
-      "message": {
-        "content": "Generated text here"
-      }
-    }
-  ]
+  "model": "meta-llama/Llama-3.3-70B-Instruct",
+  "messages": [{"role": "user", "content": "Hello"}],
+  "temperature": 0.7,
+  "max_tokens": 1000
 }
 ```
 
-If different, adjust `response.json()["choices"][0]["message"]["content"]` in `llm.py`.
+**Text Completion Format (Legacy):**
+```json
+{
+  "model": "meta-llama/Llama-3.3-70B-Instruct", 
+  "prompt": "Hello",
+  "temperature": 0.7,
+  "max_tokens": 1000
+}
+```
 
-## ✅ Supported Environment
+The library automatically detects and parses both response formats.
 
-* Python 3.8+
-* LangChain 0.1+
-* Valid io Intelligence API key
-
-## 🧪 Testing
+## ✅ Testing
 
 ```bash
-# Run tests
+# Run all tests
 pytest tests/
 
-# Run tests with coverage
+# Run with coverage
 pytest tests/ --cov=langchain_iointelligence
+
+# Run specific test
+pytest tests/test_llm.py::TestIOIntelligenceLLM::test_call_success
 ```
 
-## 🔧 Development Environment Setup
+## 🛠️ Development Setup
 
 ```bash
-# Clone repository
+# Clone and install
 git clone https://github.com/yourusername/langchain-iointelligence.git
 cd langchain-iointelligence
-
-# Install development packages
 pip install -e ".[dev]"
 
-# Set environment variables
+# Setup environment
 cp .env.example .env
-# Edit .env file to set API keys
+# Edit .env with your API credentials
 
-# Code formatting
-black langchain_iointelligence/ tests/
-
-# Type checking
-mypy langchain_iointelligence/
-
-# Linting
-flake8 langchain_iointelligence/ tests/
+# Code quality
+black langchain_iointelligence/ tests/  # Formatting
+mypy langchain_iointelligence/          # Type checking
+flake8 langchain_iointelligence/        # Linting
 ```
 
-## 📚 Future Extensions (Optional)
+## 🚀 Production Patterns
 
-* LangChain `ChatModel` support
-* Streaming output support
-* Multiple model switching support
-* Asynchronous processing support
-* More detailed error handling
+### Error Handling
+
+```python
+from langchain_iointelligence import IOIntelligenceChat
+from langchain_core.exceptions import OutputParserException
+
+chat = IOIntelligenceChat()
+
+try:
+    response = chat.invoke("Hello")
+    print(response.content)
+except OutputParserException as e:
+    print(f"API Error: {e}")
+    # Handle gracefully
+```
+
+### Retry Strategy
+
+```python
+from langchain_iointelligence import IOIntelligenceChat
+
+# Built-in retry configuration
+chat = IOIntelligenceChat(
+    max_retries=5,
+    timeout=60
+)
+```
+
+### Multi-Provider Setup
+
+```python
+# Production-ready multi-provider configuration
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic  
+from langchain_iointelligence import IOIntelligenceChat
+
+# Define provider chain with fallbacks
+primary = IOIntelligenceChat(model="meta-llama/Llama-3.3-70B-Instruct")
+secondary = ChatOpenAI(model="gpt-4")
+tertiary = ChatAnthropic(model="claude-3-sonnet-20240229")
+
+# Chain with multiple fallbacks
+robust_chat = primary.with_fallbacks([secondary, tertiary])
+
+# Use in production
+response = robust_chat.invoke("Process this request")
+```
+
+## 📊 Available Models
+
+Check the io Intelligence API documentation for the latest model list. Common models include:
+
+- `meta-llama/Llama-3.3-70B-Instruct` (default)
+- `meta-llama/Llama-3.1-405B-Instruct`
+- `meta-llama/Llama-3.1-70B-Instruct`
+
+## 🔍 Migration Guide
+
+### From v0.1.0 to v0.1.1+
+
+**Old (Text LLM only):**
+```python
+from langchain_iointelligence import IOIntelligenceLLM
+llm = IOIntelligenceLLM()
+response = llm("Hello")  # String
+```
+
+**New (Recommended Chat Model):**
+```python
+from langchain_iointelligence import IOIntelligenceChat
+from langchain_core.messages import HumanMessage
+
+chat = IOIntelligenceChat()
+response = chat.invoke([HumanMessage(content="Hello")])  # AIMessage
+print(response.content)
+```
+
+### From OpenAI
+
+**OpenAI:**
+```python
+from langchain_openai import ChatOpenAI
+chat = ChatOpenAI(model="gpt-4", temperature=0.7)
+```
+
+**io Intelligence:**
+```python
+from langchain_iointelligence import IOIntelligenceChat
+chat = IOIntelligenceChat(model="meta-llama/Llama-3.3-70B-Instruct", temperature=0.7)
+```
 
 ## 📄 License
 
@@ -194,14 +364,15 @@ MIT License
 
 ## 🤝 Contributing
 
-Pull requests and issues are welcome!
-
-1. Fork this repository
+1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push the branch (`git push origin feature/amazing-feature`)
-5. Create a Pull Request
+3. Run tests (`pytest tests/`)
+4. Commit changes (`git commit -m 'Add amazing feature'`)
+5. Push to branch (`git push origin feature/amazing-feature`)
+6. Create a Pull Request
 
 ## 📧 Support
 
-For questions or support, please create an issue at [Issues](https://github.com/yourusername/langchain-iointelligence/issues).
+- **Issues**: [GitHub Issues](https://github.com/yourusername/langchain-iointelligence/issues)
+- **Documentation**: [GitHub Wiki](https://github.com/yourusername/langchain-iointelligence/wiki)
+- **Examples**: See `examples/` directory

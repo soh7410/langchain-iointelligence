@@ -15,23 +15,23 @@ class TestIOIntelligenceLLM:
         """Test initialization with environment variables."""
         with patch.dict(os.environ, {
             'IO_API_KEY': 'test_key',
-            'IO_API_URL': 'https://test.api.com/v1/completions'
+            'IO_API_URL': 'https://test.api.com/v1/chat/completions'
         }):
             llm = IOIntelligenceLLM()
             assert llm.io_api_key == 'test_key'
-            assert llm.io_api_url == 'https://test.api.com/v1/completions'
+            assert llm.io_api_url == 'https://test.api.com/v1/chat/completions'
 
     def test_init_with_params(self):
         """Test initialization with explicit parameters."""
         llm = IOIntelligenceLLM(
             api_key='param_key',
-            api_url='https://param.api.com/v1/completions',
+            api_url='https://param.api.com/v1/chat/completions',
             model='custom-model',
             max_tokens=2000,
             temperature=0.5
         )
         assert llm.io_api_key == 'param_key'
-        assert llm.io_api_url == 'https://param.api.com/v1/completions'
+        assert llm.io_api_url == 'https://param.api.com/v1/chat/completions'
         assert llm.model == 'custom-model'
         assert llm.max_tokens == 2000
         assert llm.temperature == 0.5
@@ -52,7 +52,7 @@ class TestIOIntelligenceLLM:
         """Test _llm_type property."""
         llm = IOIntelligenceLLM(
             api_key='test_key',
-            api_url='https://test.api.com/v1/completions'
+            api_url='https://test.api.com/v1/chat/completions'
         )
         assert llm._llm_type == "io_intelligence"
 
@@ -60,7 +60,7 @@ class TestIOIntelligenceLLM:
         """Test _identifying_params property."""
         llm = IOIntelligenceLLM(
             api_key='test_key',
-            api_url='https://test.api.com/v1/completions',
+            api_url='https://test.api.com/v1/chat/completions',
             model='test-model',
             max_tokens=1500,
             temperature=0.8
@@ -73,28 +73,29 @@ class TestIOIntelligenceLLM:
     @patch('langchain_iointelligence.llm.requests.post')
     def test_call_success(self, mock_post):
         """Test successful API call."""
-        # Mock successful response
+        # Mock successful response - Chat format
         mock_response = Mock()
         mock_response.raise_for_status.return_value = None
         mock_response.json.return_value = {
-            "choices": [{"text": "This is a test response"}]
+            "choices": [{"message": {"content": "This is a test response"}}]
         }
         mock_post.return_value = mock_response
 
         llm = IOIntelligenceLLM(
             api_key='test_key',
-            api_url='https://test.api.com/v1/completions'
+            api_url='https://test.api.com/v1/chat/completions'
         )
         
         result = llm._call("Test prompt")
         assert result == "This is a test response"
 
-        # Verify API call was made correctly
+        # Verify API call was made correctly - Chat format
         mock_post.assert_called_once()
         call_args = mock_post.call_args
         assert call_args[1]['headers']['Authorization'] == 'Bearer test_key'
-        assert call_args[1]['json']['prompt'] == 'Test prompt'
-        assert call_args[1]['json']['model'] == 'default'
+        assert 'messages' in call_args[1]['json']
+        assert call_args[1]['json']['messages'][0]['content'] == 'Test prompt'
+        assert call_args[1]['json']['model'] == 'meta-llama/Llama-3.3-70B-Instruct'
         assert call_args[1]['json']['max_tokens'] == 1000
         assert call_args[1]['json']['temperature'] == 0.7
 
@@ -104,13 +105,13 @@ class TestIOIntelligenceLLM:
         mock_response = Mock()
         mock_response.raise_for_status.return_value = None
         mock_response.json.return_value = {
-            "choices": [{"text": "Response with stop"}]
+            "choices": [{"message": {"content": "Response with stop"}}]
         }
         mock_post.return_value = mock_response
 
         llm = IOIntelligenceLLM(
             api_key='test_key',
-            api_url='https://test.api.com/v1/completions'
+            api_url='https://test.api.com/v1/chat/completions'
         )
         
         result = llm._call("Test prompt", stop=["stop", "end"])
@@ -127,7 +128,7 @@ class TestIOIntelligenceLLM:
 
         llm = IOIntelligenceLLM(
             api_key='test_key',
-            api_url='https://test.api.com/v1/completions'
+            api_url='https://test.api.com/v1/chat/completions'
         )
         
         with pytest.raises(GenerationError, match="API request failed"):
@@ -143,10 +144,10 @@ class TestIOIntelligenceLLM:
 
         llm = IOIntelligenceLLM(
             api_key='test_key',
-            api_url='https://test.api.com/v1/completions'
+            api_url='https://test.api.com/v1/chat/completions'
         )
         
-        with pytest.raises(GenerationError, match="Invalid API response format"):
+        with pytest.raises(GenerationError, match="No choices in API response"):
             llm._call("Test prompt")
 
     @patch('langchain_iointelligence.llm.requests.post')
@@ -159,7 +160,7 @@ class TestIOIntelligenceLLM:
 
         llm = IOIntelligenceLLM(
             api_key='test_key',
-            api_url='https://test.api.com/v1/completions'
+            api_url='https://test.api.com/v1/chat/completions'
         )
         
         with pytest.raises(GenerationError, match="No choices in API response"):
@@ -172,22 +173,22 @@ class TestIOIntelligenceLLM:
             mock_response = Mock()
             mock_response.raise_for_status.return_value = None
             mock_response.json.return_value = {
-                "choices": [{"text": "Integration test response"}]
+                "choices": [{"message": {"content": "Integration test response"}}]
             }
             mock_post.return_value = mock_response
 
             llm = IOIntelligenceLLM(
                 api_key='test_key',
-                api_url='https://test.api.com/v1/completions'
+                api_url='https://test.api.com/v1/chat/completions'
             )
             
-            # Test direct call
-            result = llm("Test integration prompt")
+            # Test direct call (using invoke instead of deprecated __call__)
+            result = llm.invoke("Test integration prompt")
             assert result == "Integration test response"
 
     @patch.dict(os.environ, {
         'IO_API_KEY': 'env_test_key',
-        'IO_API_URL': 'https://env.test.api.com/v1/completions'
+        'IO_API_URL': 'https://env.test.api.com/v1/chat/completions'
     })
     @patch('langchain_iointelligence.llm.requests.post')
     def test_env_loading_integration(self, mock_post):
@@ -195,19 +196,19 @@ class TestIOIntelligenceLLM:
         mock_response = Mock()
         mock_response.raise_for_status.return_value = None
         mock_response.json.return_value = {
-            "choices": [{"text": "Env test response"}]
+            "choices": [{"message": {"content": "Env test response"}}]
         }
         mock_post.return_value = mock_response
 
         llm = IOIntelligenceLLM()
-        result = llm("Test env prompt")
+        result = llm.invoke("Test env prompt")
         
         assert result == "Env test response"
         
         # Verify correct API key was used
         call_args = mock_post.call_args
         assert call_args[1]['headers']['Authorization'] == 'Bearer env_test_key'
-        assert call_args[0][0] == 'https://env.test.api.com/v1/completions'
+        assert call_args[0][0] == 'https://env.test.api.com/v1/chat/completions'
 
 
 if __name__ == "__main__":

@@ -68,9 +68,6 @@ instance/
 # Scrapy stuff:
 .scrapy
 
-# Sphinx documentation
-docs/_build/
-
 # PyBuilder
 target/
 
@@ -109,6 +106,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+test_env/
 
 # Spyder project settings
 .spyderproject
@@ -123,7 +121,7 @@ venv.bak/
 # mypy
 .mypy_cache/
 .dmypy.json
-dmypy.json
+dmyson
 
 # Pyre type checker
 .pyre/
@@ -162,3 +160,20 @@ test_*_env/
 .coverage.*
 .pytest_cache/
 .mypy_cache/
+
+# ========== 今回のリファクタリングで追加 ==========
+# Development/testing scripts (temporary)
+run_tests_guide.py
+diagnose_issues.py
+test_results_guide.py
+analyze_files.py
+
+# Environment setup scripts (temporary) 
+check_test_environment.sh
+fix_pytest_environment.sh
+
+# Unknown temporary files
+=*
+
+# Shell script logs
+*.sh.log
