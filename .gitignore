@@ -167,10 +167,24 @@ run_tests_guide.py
 diagnose_issues.py
 test_results_guide.py
 analyze_files.py
+check_syntax.py
+final_verification.py
+fix_installation.py
+fix_lint_errors.py
+run_chat_tests.py
+run_direct_tests.py
+simple_test.py
+test_complete_solution.py
+test_refactoring.py
+verify_basic.py
 
 # Environment setup scripts (temporary) 
 check_test_environment.sh
 fix_pytest_environment.sh
+delete_pytest_ini
+emergency_test.sh
+fix_imports.sh
+format_code.sh
 
 # Unknown temporary files
 =*

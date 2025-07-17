@@ -1,17 +1,21 @@
 """Enhanced IOIntelligenceChatModel implementation for LangChain."""
 
 import os
-from typing import Any, Dict, List, Optional, Iterator
+from typing import Any, Dict, Iterator, List, Optional
+
 from dotenv import load_dotenv
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage
-from langchain_core.outputs import ChatGeneration, ChatResult, ChatGenerationChunk
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import (AIMessage, BaseMessage, HumanMessage,
+                                     SystemMessage)
+from langchain_core.outputs import (ChatGeneration, ChatGenerationChunk,
+                                    ChatResult)
 
 try:
+    from .exceptions import (IOIntelligenceError,
+                             IOIntelligenceInvalidResponseError)
     from .http_client import IOIntelligenceHTTPClient
     from .streaming import IOIntelligenceStreamer
-    from .exceptions import IOIntelligenceError, IOIntelligenceInvalidResponseError
     from .utils import IOIntelligenceUtils
 except ImportError:
     # Fallback for basic functionality if enhanced modules aren't available
@@ -20,9 +24,10 @@ except ImportError:
     IOIntelligenceError = Exception
     IOIntelligenceInvalidResponseError = Exception
     IOIntelligenceUtils = None
-    
+
     import requests
-    from langchain_core.exceptions import OutputParserException as GenerationError
+    from langchain_core.exceptions import \
+        OutputParserException as GenerationError
 
 # Load environment variables from .env file
 load_dotenv()
@@ -30,7 +35,7 @@ load_dotenv()
 
 class IOIntelligenceChatModel(BaseChatModel):
     """Enhanced LangChain ChatModel wrapper for io Intelligence API."""
-    
+
     # Declare all fields that will be used
     io_api_key: str = ""
     io_api_url: str = ""
@@ -41,7 +46,7 @@ class IOIntelligenceChatModel(BaseChatModel):
     max_retries: int = 3
     retry_delay: float = 1.0
     streaming: bool = False
-    
+
     def __init__(
         self,
         api_key: Optional[str] = None,
@@ -53,10 +58,10 @@ class IOIntelligenceChatModel(BaseChatModel):
         max_retries: int = 3,
         retry_delay: float = 1.0,
         streaming: bool = False,
-        **kwargs
+        **kwargs,
     ):
         """Initialize IOIntelligenceChatModel.
-        
+
         Args:
             api_key: io Intelligence API key (optional, defaults to IO_API_KEY env var)
             api_url: io Intelligence API URL (optional, defaults to IO_API_URL env var)
@@ -69,78 +74,80 @@ class IOIntelligenceChatModel(BaseChatModel):
             streaming: Enable streaming responses (default: False)
         """
         # Extract and set API credentials
-        api_key = api_key or os.getenv('IO_API_KEY')
-        api_url = api_url or os.getenv('IO_API_URL')
-        
+        api_key = api_key or os.getenv("IO_API_KEY")
+        api_url = api_url or os.getenv("IO_API_URL")
+
         if not api_key:
-            raise ValueError("IO_API_KEY must be provided either as parameter or environment variable")
+            raise ValueError(
+                "IO_API_KEY must be provided either as parameter or environment variable"
+            )
         if not api_url:
-            raise ValueError("IO_API_URL must be provided either as parameter or environment variable")
-        
+            raise ValueError(
+                "IO_API_URL must be provided either as parameter or environment variable"
+            )
+
         # Set field values explicitly
-        kwargs.update({
-            'io_api_key': api_key,
-            'io_api_url': api_url,
-            'model': model,
-            'max_tokens': max_tokens,
-            'temperature': temperature,
-            'timeout': timeout,
-            'max_retries': max_retries,
-            'retry_delay': retry_delay,
-            'streaming': streaming
-        })
-            
+        kwargs.update(
+            {
+                "io_api_key": api_key,
+                "io_api_url": api_url,
+                "model": model,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "timeout": timeout,
+                "max_retries": max_retries,
+                "retry_delay": retry_delay,
+                "streaming": streaming,
+            }
+        )
+
         super().__init__(**kwargs)
-        
+
         # Initialize enhanced features if available
         self._http_client: Optional[Any] = None
         self._streamer: Optional[Any] = None
         self._utils: Optional[Any] = None
-    
+
     @property
     def _llm_type(self) -> str:
         """Return identifier of LLM type."""
         return "io_intelligence_chat"
-    
+
     @property
     def http_client(self):
         """Get or create HTTP client."""
-        if IOIntelligenceHTTPClient and self._http_client is None:
+        if IOIntelligenceHTTPClient is not None and self._http_client is None:
             self._http_client = IOIntelligenceHTTPClient(
                 api_key=self.io_api_key,
                 api_url=self.io_api_url,
                 timeout=self.timeout,
                 max_retries=self.max_retries,
-                retry_delay=self.retry_delay
+                retry_delay=self.retry_delay,
             )
         return self._http_client
-    
+
     @property
     def streamer(self):
         """Get or create streaming client."""
         if IOIntelligenceStreamer and self._streamer is None:
             self._streamer = IOIntelligenceStreamer(
-                api_key=self.io_api_key,
-                api_url=self.io_api_url,
-                timeout=self.timeout
+                api_key=self.io_api_key, api_url=self.io_api_url, timeout=self.timeout
             )
         return self._streamer
-    
+
     @property
     def utils(self):
         """Get or create utilities client."""
         if IOIntelligenceUtils and self._utils is None:
             self._utils = IOIntelligenceUtils(
-                api_key=self.io_api_key,
-                api_url=self.io_api_url,
-                timeout=self.timeout
+                api_key=self.io_api_key, api_url=self.io_api_url, timeout=self.timeout
             )
         return self._utils
-    
+
     def _convert_messages_to_api_format(self, messages: List[BaseMessage]) -> List[Dict[str, str]]:
         """Convert LangChain messages to API format."""
         api_messages = []
-        
+
         for message in messages:
             if isinstance(message, HumanMessage):
                 api_messages.append({"role": "user", "content": message.content})
@@ -151,9 +158,9 @@ class IOIntelligenceChatModel(BaseChatModel):
             else:
                 # Generic message - default to user
                 api_messages.append({"role": "user", "content": message.content})
-        
+
         return api_messages
-    
+
     def _generate(
         self,
         messages: List[BaseMessage],
@@ -164,7 +171,7 @@ class IOIntelligenceChatModel(BaseChatModel):
         """Run the LLM on the given messages."""
         # Convert messages to API format
         api_messages = self._convert_messages_to_api_format(messages)
-        
+
         # Prepare request data
         data = {
             "model": self.model,
@@ -172,28 +179,32 @@ class IOIntelligenceChatModel(BaseChatModel):
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
         }
-        
+
         # Add stop words if provided
         if stop:
             data["stop"] = stop
-            
+
         # Add any additional kwargs
         data.update(kwargs)
-        
+
         try:
             # Use enhanced HTTP client if available, otherwise fallback
-            if self.http_client:
+            if self.http_client is not None:
                 response_data = self.http_client.post_with_retry(data)
             else:
                 response_data = self._fallback_request(data)
-            
+
             # Parse response - supports both Chat and Completion formats
             if "choices" not in response_data or not response_data["choices"]:
-                error_class = IOIntelligenceInvalidResponseError if IOIntelligenceInvalidResponseError != Exception else GenerationError
+                error_class = (
+                    IOIntelligenceInvalidResponseError
+                    if IOIntelligenceInvalidResponseError != Exception
+                    else GenerationError
+                )
                 raise error_class("No choices in API response")
-                
+
             choice = response_data["choices"][0]
-            
+
             # Chat format: choices[0].message.content
             if "message" in choice and "content" in choice["message"]:
                 content = choice["message"]["content"]
@@ -201,17 +212,21 @@ class IOIntelligenceChatModel(BaseChatModel):
             elif "text" in choice:
                 content = choice["text"]
             else:
-                error_class = IOIntelligenceInvalidResponseError if IOIntelligenceInvalidResponseError != Exception else GenerationError
+                error_class = (
+                    IOIntelligenceInvalidResponseError
+                    if IOIntelligenceInvalidResponseError != Exception
+                    else GenerationError
+                )
                 raise error_class(
                     "Unsupported response schema - expected 'message.content' or 'text' in choices"
                 )
-            
+
             # Create AIMessage with the response
             message = AIMessage(content=content)
-            
+
             # Extract usage information if available
             usage_data = response_data.get("usage", {})
-            
+
             generation = ChatGeneration(
                 message=message,
                 generation_info={
@@ -220,36 +235,32 @@ class IOIntelligenceChatModel(BaseChatModel):
                     "finish_reason": choice.get("finish_reason"),
                     "response_id": response_data.get("id"),
                     "created": response_data.get("created"),
-                }
+                },
             )
-            
+
             return ChatResult(generations=[generation])
-            
+
         except Exception as e:
-            if IOIntelligenceError != Exception:
-                if isinstance(e, IOIntelligenceError):
-                    raise
-                else:
-                    raise IOIntelligenceError(f"Unexpected error: {str(e)}")
+            # Re-raise IOIntelligence-specific errors as-is
+            if IOIntelligenceError != Exception and isinstance(e, IOIntelligenceError):
+                raise
+            # Convert other errors to appropriate types
+            elif IOIntelligenceError != Exception:
+                raise IOIntelligenceError(f"Unexpected error: {str(e)}")
             else:
                 raise GenerationError(f"API request failed: {str(e)}")
-    
+
     def _fallback_request(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Fallback HTTP request without enhanced features."""
         headers = {
             "Authorization": f"Bearer {self.io_api_key}",
             "Content-Type": "application/json",
         }
-        
-        response = requests.post(
-            self.io_api_url,
-            headers=headers,
-            json=data,
-            timeout=self.timeout
-        )
+
+        response = requests.post(self.io_api_url, headers=headers, json=data, timeout=self.timeout)
         response.raise_for_status()
         return response.json()
-    
+
     def _stream(
         self,
         messages: List[BaseMessage],
@@ -261,7 +272,7 @@ class IOIntelligenceChatModel(BaseChatModel):
         # If streaming is available, use it
         if self.streamer:
             api_messages = self._convert_messages_to_api_format(messages)
-            
+
             data = {
                 "model": self.model,
                 "messages": api_messages,
@@ -269,28 +280,30 @@ class IOIntelligenceChatModel(BaseChatModel):
                 "max_tokens": self.max_tokens,
                 "stream": True,
             }
-            
+
             if stop:
                 data["stop"] = stop
             data.update(kwargs)
-            
+
             try:
                 for chunk in self.streamer.stream_chat_completion(data):
                     if run_manager:
                         run_manager.on_llm_new_token(chunk.message.content or "")
                     yield chunk
             except Exception as e:
-                error_class = IOIntelligenceError if IOIntelligenceError != Exception else GenerationError
+                error_class = (
+                    IOIntelligenceError if IOIntelligenceError != Exception else GenerationError
+                )
                 raise error_class(f"Streaming error: {str(e)}")
         else:
             # Fallback: use non-streaming and yield complete response
             result = self._generate(messages, stop, run_manager, **kwargs)
             chunk = ChatGenerationChunk(
                 message=result.generations[0].message,
-                generation_info=result.generations[0].generation_info
+                generation_info=result.generations[0].generation_info,
             )
             yield chunk
-    
+
     @property
     def _identifying_params(self) -> Dict[str, Any]:
         """Return a dictionary of identifying parameters."""
