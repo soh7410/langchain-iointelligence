@@ -46,7 +46,7 @@ class TestUsageMetadata:
             # Check response_metadata
             assert hasattr(ai_message, 'response_metadata')
             assert ai_message.response_metadata["token_usage"]["prompt_tokens"] == 10
-            assert ai_message.response_metadata["model_name"] == "meta-llama/Llama-3.3-70B-Instruct"
+            assert ai_message.response_metadata["model"] == "meta-llama/Llama-3.3-70B-Instruct"
 
     def test_usage_metadata_partial_data(self):
         """Test usage metadata mapping with partial data."""

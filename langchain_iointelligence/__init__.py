@@ -1,26 +1,23 @@
 """LangChain wrapper for io Intelligence LLM API."""
 
+from .chat import IOIntelligenceChat, IOIntelligenceChatModel
+from .exceptions import (IOIntelligenceAPIError,
+                         IOIntelligenceAuthenticationError,
+                         IOIntelligenceConnectionError, IOIntelligenceError,
+                         IOIntelligenceInvalidResponseError,
+                         IOIntelligenceRateLimitError,
+                         IOIntelligenceServerError, IOIntelligenceTimeoutError)
 from .llm import IOIntelligenceLLM
-from .chat import IOIntelligenceChatModel, IOIntelligenceChat
-from .exceptions import (
-    IOIntelligenceError,
-    IOIntelligenceAPIError,
-    IOIntelligenceRateLimitError,
-    IOIntelligenceServerError,
-    IOIntelligenceAuthenticationError,
-    IOIntelligenceTimeoutError,
-    IOIntelligenceConnectionError,
-    IOIntelligenceInvalidResponseError
-)
-from .utils import IOIntelligenceUtils, list_available_models, is_model_available
+from .utils import (IOIntelligenceUtils, is_model_available,
+                    list_available_models)
 
 __version__ = "0.2.0"
 __all__ = [
-    "IOIntelligenceLLM", 
-    "IOIntelligenceChatModel", 
+    "IOIntelligenceLLM",
+    "IOIntelligenceChatModel",
     "IOIntelligenceChat",
     "IOIntelligenceError",
-    "IOIntelligenceAPIError", 
+    "IOIntelligenceAPIError",
     "IOIntelligenceRateLimitError",
     "IOIntelligenceServerError",
     "IOIntelligenceAuthenticationError",
@@ -29,5 +26,5 @@ __all__ = [
     "IOIntelligenceInvalidResponseError",
     "IOIntelligenceUtils",
     "list_available_models",
-    "is_model_available"
+    "is_model_available",
 ]

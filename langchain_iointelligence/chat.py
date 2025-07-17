@@ -8,6 +8,7 @@ from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import (AIMessage, BaseMessage, HumanMessage,
                                      SystemMessage)
+from langchain_core.messages.ai import UsageMetadata
 from langchain_core.outputs import (ChatGeneration, ChatGenerationChunk,
                                     ChatResult)
 
@@ -51,6 +52,7 @@ class IOIntelligenceChatModel(BaseChatModel):
         self,
         api_key: Optional[str] = None,
         api_url: Optional[str] = None,
+        base_url: Optional[str] = None,  # OpenAI-compatible base_url
         model: str = "meta-llama/Llama-3.3-70B-Instruct",
         max_tokens: int = 1000,
         temperature: float = 0.7,
@@ -65,6 +67,7 @@ class IOIntelligenceChatModel(BaseChatModel):
         Args:
             api_key: io Intelligence API key (optional, defaults to IO_API_KEY env var)
             api_url: io Intelligence API URL (optional, defaults to IO_API_URL env var)
+            base_url: Base URL for OpenAI-compatible interface (auto-adds /v1/chat/completions)
             model: Model name to use (default: "meta-llama/Llama-3.3-70B-Instruct")
             max_tokens: Maximum tokens to generate (default: 1000)
             temperature: Temperature for generation (default: 0.7)
@@ -75,7 +78,18 @@ class IOIntelligenceChatModel(BaseChatModel):
         """
         # Extract and set API credentials
         api_key = api_key or os.getenv("IO_API_KEY")
-        api_url = api_url or os.getenv("IO_API_URL")
+        
+        # Handle base_url vs api_url
+        if base_url and not api_url:
+            # Auto-detect and append endpoint if needed
+            if base_url.endswith('/chat/completions'):
+                api_url = base_url
+            elif base_url.endswith('/v1'):
+                api_url = f"{base_url}/chat/completions"
+            else:
+                api_url = f"{base_url}/v1/chat/completions"
+        else:
+            api_url = api_url or os.getenv("IO_API_URL")
 
         if not api_key:
             raise ValueError(
@@ -224,21 +238,20 @@ class IOIntelligenceChatModel(BaseChatModel):
             # Create AIMessage with the response
             raw_usage = response_data.get("usage", {})
             
-            # Map usage data to LangChain standard format for usage_metadata
-            # All fields are required by LangChain's Pydantic model
-            usage_metadata = {
-                "input_tokens": raw_usage.get("prompt_tokens", 0),
-                "output_tokens": raw_usage.get("completion_tokens", 0),
-                "total_tokens": raw_usage.get("total_tokens", 0),
-            }
+            # Create LangChain standard UsageMetadata
+            usage_metadata = UsageMetadata(
+                input_tokens=raw_usage.get("prompt_tokens", 0),
+                output_tokens=raw_usage.get("completion_tokens", 0),
+                total_tokens=raw_usage.get("total_tokens", 0),
+            )
             
-            # Create AIMessage with usage_metadata properly set
+            # Create AIMessage with proper usage_metadata and response_metadata
             message = AIMessage(
                 content=content,
                 usage_metadata=usage_metadata,
                 response_metadata={
                     "token_usage": raw_usage,
-                    "model_name": self.model,
+                    "model": response_data.get("model", self.model),
                     "finish_reason": choice.get("finish_reason"),
                     "id": response_data.get("id"),
                     "created": response_data.get("created"),
@@ -249,7 +262,7 @@ class IOIntelligenceChatModel(BaseChatModel):
                 message=message,
                 generation_info={
                     "model": self.model,
-                    "usage": raw_usage,
+                    "usage": raw_usage,  # Backward compatibility
                     "finish_reason": choice.get("finish_reason"),
                     "response_id": response_data.get("id"),
                     "created": response_data.get("created"),

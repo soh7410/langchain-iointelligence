@@ -28,11 +28,11 @@
 ## 🚀 Key Features
 
 * **🔄 Dual Interface Support**: Both `IOIntelligenceLLM` (text-based) and `IOIntelligenceChatModel` (message-based)
-* **⚡ Full ChatGPT Compatibility**: Drop-in replacement with identical parameters and behavior
-* **📡 Real Streaming Support**: Server-sent events with chunked responses
+* **⚡ OpenAI-Compatible Interface**: Drop-in replacement with identical parameters and behavior
+* **📡 Streaming Support**: Token-by-token streaming (usage-at-end coming soon)
 * **🛡️ Production-Grade Reliability**: Automatic retries, detailed error classification, and robust fallbacks
 * **🔀 Runtime Provider Switching**: Easy switching between OpenAI, Anthropic, and io Intelligence
-* **📊 Usage Tracking**: Complete token usage and model metadata capture
+* **📊 LangChain Token Tracking**: Standard `usage_metadata` with `input_tokens`/`output_tokens`/`total_tokens`
 * **🎛️ Modern LangChain Integration**: Full support for `prompt | llm | parser` chains
 
 ## ⚙️ Installation

@@ -37,11 +37,13 @@ setup(
     ],
     extras_require={
         "dev": [
-            "pytest>=8.3.4",
-            "pytest-cov>=2.0",
+            "pytest>=7.0.0",
+            "pytest-cov>=4.0.0",
             "black>=22.0",
-            "flake8>=4.0",
-            "mypy>=0.910",
+            "flake8>=5.0.0",
+            "mypy>=1.0.0",
+            "isort>=5.10.0",
+            "types-requests>=2.25.0",
         ],
     },
     keywords="langchain llm ai io-intelligence api-wrapper",
