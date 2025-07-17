@@ -7,6 +7,20 @@
 
 > **📦 [Available on PyPI](https://pypi.org/project/langchain-iointelligence/)** - Install with `pip install langchain-iointelligence`
 
+## 📋 Feature Support Matrix
+
+| Feature | Status | Notes |
+|---------|-----------|-------|
+| ✅ **Chat Model** | **Fully Supported** | Message-based interface with system/user/assistant roles |
+| ✅ **Text LLM** | **Fully Supported** | Traditional prompt-response interface |
+| ✅ **Sync Generation** | **Fully Supported** | Standard text generation with token usage tracking |
+| ✅ **Error Handling** | **Production Ready** | Comprehensive error classification and retry logic |
+| ✅ **Token Usage** | **Fully Supported** | Input/output/total token tracking with LangChain compatibility |
+| ⚠️ **Streaming** | **Partial Support** | Basic streaming available, full SSE implementation in progress |
+| ❌ **Function/Tool Calling** | **Not Supported** | Planned for future release |
+| ❌ **Vision/Multimodal** | **Not Supported** | Text-only interface currently |
+| ❌ **Embeddings** | **Not Supported** | Use dedicated embedding providers |
+
 **Production-ready LangChain wrapper** for io Intelligence LLM API with **complete ChatGPT API compatibility**. Features both traditional Text LLM and modern Chat Model interfaces with advanced error handling, streaming support, and seamless provider switching.
 
 ## 🚀 Key Features

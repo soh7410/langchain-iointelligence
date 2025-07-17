@@ -226,6 +226,17 @@ class IOIntelligenceChatModel(BaseChatModel):
 
             # Extract usage information if available
             usage_data = response_data.get("usage", {})
+            
+            # Map usage data to LangChain standard format
+            usage_metadata = {}
+            if usage_data:
+                # Standard LangChain usage_metadata mapping
+                if "prompt_tokens" in usage_data:
+                    usage_metadata["input_tokens"] = usage_data["prompt_tokens"]
+                if "completion_tokens" in usage_data:
+                    usage_metadata["output_tokens"] = usage_data["completion_tokens"]
+                if "total_tokens" in usage_data:
+                    usage_metadata["total_tokens"] = usage_data["total_tokens"]
 
             generation = ChatGeneration(
                 message=message,
@@ -238,15 +249,21 @@ class IOIntelligenceChatModel(BaseChatModel):
                 },
             )
 
-            return ChatResult(generations=[generation])
+            return ChatResult(
+                generations=[generation],
+                llm_output={
+                    "token_usage": usage_metadata,
+                    "model_name": self.model,
+                }
+            )
 
         except Exception as e:
             # Re-raise IOIntelligence-specific errors as-is
             if IOIntelligenceError != Exception and isinstance(e, IOIntelligenceError):
                 raise
-            # Convert other errors to appropriate types
+            # Convert other errors to appropriate types with consistent prefix
             elif IOIntelligenceError != Exception:
-                raise IOIntelligenceError(f"Unexpected error: {str(e)}")
+                raise IOIntelligenceError(f"API request failed: {str(e)}")
             else:
                 raise GenerationError(f"API request failed: {str(e)}")
 
@@ -294,7 +311,7 @@ class IOIntelligenceChatModel(BaseChatModel):
                 error_class = (
                     IOIntelligenceError if IOIntelligenceError != Exception else GenerationError
                 )
-                raise error_class(f"Streaming error: {str(e)}")
+                raise error_class(f"API request failed: Streaming error - {str(e)}")
         else:
             # Fallback: use non-streaming and yield complete response
             result = self._generate(messages, stop, run_manager, **kwargs)
