@@ -16,7 +16,7 @@ def main():
     
     # Initialize the LLM
     llm = IOIntelligenceLLM(
-        model="gpt-3.5-turbo",
+        model="meta-llama/Llama-3.3-70B-Instruct",
         max_tokens=200,
         temperature=0.7
     )

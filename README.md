@@ -7,29 +7,17 @@
 
 > **📦 [Available on PyPI](https://pypi.org/project/langchain-iointelligence/)** - Install with `pip install langchain-iointelligence`
 
-A modern LangChain wrapper for io Intelligence LLM API with both **Text LLM** and **Chat Model** support. Provides seamless integration with LangChain's ecosystem including chains, agents, and prompt templates.
+**Production-ready LangChain wrapper** for io Intelligence LLM API with **complete ChatGPT API compatibility**. Features both traditional Text LLM and modern Chat Model interfaces with advanced error handling, streaming support, and seamless provider switching.
 
-## 🚀 Features
+## 🚀 Key Features
 
-* **Dual Interface Support**: Both `IOIntelligenceLLM` (text-based) and `IOIntelligenceChatModel` (message-based)
-* **Modern LangChain Compatibility**: Full support for `prompt | llm | parser` chains and `AIMessage` responses
-* **OpenAI-Compatible API**: Supports both Chat (`messages`) and Completion (`prompt`) API formats
-* **Runtime Configuration**: Easy provider switching with `configurable_alternatives()`
-* **Fallback Support**: Robust error handling with `.with_fallbacks()` for production use
-* **Environment Variable Management**: Seamless dev/prod switching via `.env` files
-
-## 🧱 Architecture
-
-```
-langchain-iointelligence/
-├── langchain_iointelligence/
-│   ├── __init__.py
-│   ├── llm.py                    # IOIntelligenceLLM (BaseLLM)
-│   └── chat.py                   # IOIntelligenceChatModel (BaseChatModel)
-├── examples/                     # Usage examples
-├── tests/                        # Test suites
-└── README.md
-```
+* **🔄 Dual Interface Support**: Both `IOIntelligenceLLM` (text-based) and `IOIntelligenceChatModel` (message-based)
+* **⚡ Full ChatGPT Compatibility**: Drop-in replacement with identical parameters and behavior
+* **📡 Real Streaming Support**: Server-sent events with chunked responses
+* **🛡️ Production-Grade Reliability**: Automatic retries, detailed error classification, and robust fallbacks
+* **🔀 Runtime Provider Switching**: Easy switching between OpenAI, Anthropic, and io Intelligence
+* **📊 Usage Tracking**: Complete token usage and model metadata capture
+* **🎛️ Modern LangChain Integration**: Full support for `prompt | llm | parser` chains
 
 ## ⚙️ Installation
 
@@ -37,14 +25,7 @@ langchain-iointelligence/
 pip install langchain-iointelligence
 ```
 
-For development:
-```bash
-git clone https://github.com/yourusername/langchain-iointelligence.git
-cd langchain-iointelligence
-pip install -e ".[dev]"
-```
-
-## 🔐 Environment Setup
+## 🔐 Quick Setup
 
 Create a `.env` file:
 
@@ -55,324 +36,431 @@ IO_API_URL=https://api.intelligence.io.solutions/api/v1/chat/completions
 
 ## 🎯 Quick Start
 
-### Modern Chat Model (Recommended)
+### **Modern Chat Model (Recommended)**
 
 ```python
 from langchain_iointelligence import IOIntelligenceChat
 from langchain_core.messages import HumanMessage
 
-# Initialize chat model
+# Initialize with ChatGPT-compatible parameters
 chat = IOIntelligenceChat(
     model="meta-llama/Llama-3.3-70B-Instruct",
     temperature=0.7,
-    max_tokens=1000
+    max_tokens=1000,
+    timeout=30,
+    max_retries=3
 )
 
 # Direct usage
-messages = [HumanMessage(content="Tell me about quantum computing")]
+messages = [HumanMessage(content="Explain quantum computing")]
 response = chat.invoke(messages)
 print(response.content)  # AIMessage content
+print(response.usage_metadata)  # Token usage info
 ```
 
-### Text LLM (Legacy Support)
+### **Streaming Responses**
 
 ```python
-from langchain_iointelligence import IOIntelligenceLLM
-
-llm = IOIntelligenceLLM()
-response = llm.invoke("Tell me about quantum computing")
-print(response)  # String response
-```
-
-## 🔗 LangChain Integration Examples
-
-### Modern Chain with Chat Model
-
-```python
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_iointelligence import IOIntelligenceChat
 
-# Create prompt template
-prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a helpful AI assistant."),
-    ("human", "Tell me a {adjective} joke about {topic}")
-])
+chat = IOIntelligenceChat(streaming=True)
+messages = [HumanMessage(content="Write a story about AI")]
 
-# Initialize chat model
-chat = IOIntelligenceChat()
-
-# Modern chain: prompt | chat
-chain = prompt | chat
-result = chain.invoke({"adjective": "funny", "topic": "robots"})
-print(result.content)
+# Real streaming with server-sent events
+for chunk in chat.stream(messages):
+    print(chunk.content, end="", flush=True)
 ```
 
-### Runtime Provider Switching
+### **Model Discovery**
 
 ```python
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
-from langchain_iointelligence import IOIntelligenceChat
+from langchain_iointelligence import list_available_models, is_model_available
 
-# Configure multiple providers
-chat_io = IOIntelligenceChat()
-chat_openai = ChatOpenAI()
-chat_anthropic = ChatAnthropic()
+# List all available models
+models = list_available_models()
+print("Available models:", models)
 
-# Runtime switching
-configurable_chat = chat_openai.configurable_alternatives(
-    which="provider",
-    default_key="openai",
-    iointelligence=chat_io,
-    anthropic=chat_anthropic,
-)
-
-# Use with config
-response = configurable_chat.invoke(
-    "Hello, world!",
-    config={"configurable": {"provider": "iointelligence"}}
-)
+# Check if specific model exists
+if is_model_available("meta-llama/Llama-3.3-70B-Instruct"):
+    print("Model is available!")
 ```
 
-### Fallback Configuration
+## 🔗 Advanced LangChain Integration
 
-```python
-from langchain_openai import ChatOpenAI
-from langchain_iointelligence import IOIntelligenceChat
-
-# Primary and fallback models
-primary = IOIntelligenceChat()
-fallback = ChatOpenAI()
-
-# Chain with fallback
-reliable_chat = primary.with_fallbacks([fallback])
-
-# Automatically switches on failure
-response = reliable_chat.invoke("Explain machine learning")
-```
-
-### Advanced Chain with Output Parser
+### **Modern Chain with Full Pipeline**
 
 ```python
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_iointelligence import IOIntelligenceChat
 
+# Complete modern pipeline
 prompt = ChatPromptTemplate.from_messages([
-    ("system", "Respond in exactly 50 words"),
-    ("human", "{question}")
+    ("system", "You are an expert technical writer."),
+    ("human", "Explain {topic} in {style} style, max {words} words.")
 ])
 
-chat = IOIntelligenceChat(temperature=0.3)
+chat = IOIntelligenceChat(
+    model="meta-llama/Llama-3.3-70B-Instruct",
+    temperature=0.3
+)
+
 parser = StrOutputParser()
 
-# Complete chain
+# Modern chain: prompt | chat | parser
 chain = prompt | chat | parser
 
-result = chain.invoke({"question": "What is artificial intelligence?"})
-print(result)  # Clean string output
+result = chain.invoke({
+    "topic": "machine learning",
+    "style": "beginner-friendly", 
+    "words": "200"
+})
+print(result)
 ```
 
-## 🎛️ Configuration Options
+### **Runtime Provider Switching**
 
-### Chat Model Parameters
+```python
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic  
+from langchain_iointelligence import IOIntelligenceChat
+
+# Configure multiple providers
+providers = {
+    "openai": ChatOpenAI(model="gpt-4"),
+    "anthropic": ChatAnthropic(model="claude-3-sonnet-20240229"),
+    "iointelligence": IOIntelligenceChat(model="meta-llama/Llama-3.3-70B-Instruct")
+}
+
+# Runtime switching via configuration
+configurable_chat = providers["openai"].configurable_alternatives(
+    ConfigurableField(id="provider"),
+    default_key="openai",
+    **providers
+)
+
+# Switch provider at runtime
+response = configurable_chat.invoke(
+    "Hello world!",
+    config={"configurable": {"provider": "iointelligence"}}
+)
+```
+
+### **Production Fallback Configuration**
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+from langchain_iointelligence import IOIntelligenceChat
+
+# Multi-tier fallback system
+primary = IOIntelligenceChat(
+    model="meta-llama/Llama-3.3-70B-Instruct",
+    timeout=10,
+    max_retries=2
+)
+
+secondary = ChatOpenAI(model="gpt-4", timeout=15)
+tertiary = ChatAnthropic(model="claude-3-sonnet-20240229")
+
+# Automatic fallback chain
+reliable_chat = primary.with_fallbacks([secondary, tertiary])
+
+# Will automatically try alternatives on failure
+response = reliable_chat.invoke("Complex analysis request")
+```
+
+### **Error Handling and Monitoring**
+
+```python
+from langchain_iointelligence import (
+    IOIntelligenceChat,
+    IOIntelligenceRateLimitError,
+    IOIntelligenceServerError,
+    IOIntelligenceAuthenticationError
+)
+
+chat = IOIntelligenceChat()
+
+try:
+    response = chat.invoke("Generate report")
+    print(f"Success! Used {response.usage_metadata['total_tokens']} tokens")
+    
+except IOIntelligenceRateLimitError as e:
+    print(f"Rate limited: {e}. Retry after: {e.retry_after}")
+    
+except IOIntelligenceServerError as e:
+    print(f"Server error {e.status_code}: {e}")
+    
+except IOIntelligenceAuthenticationError:
+    print("Invalid API key - check your credentials")
+```
+
+## 🛠️ Configuration Options
+
+### **Complete Parameter Reference**
 
 ```python
 from langchain_iointelligence import IOIntelligenceChat
 
 chat = IOIntelligenceChat(
     # API Configuration
-    api_key="your_key",                           # or use IO_API_KEY env var
+    api_key="your_key",                           # or use IO_API_KEY env var  
     api_url="https://api.example.com/v1/chat",    # or use IO_API_URL env var
     
-    # Model Parameters
-    model="meta-llama/Llama-3.3-70B-Instruct",   # Model name
+    # Model Parameters (ChatGPT Compatible)
+    model="meta-llama/Llama-3.3-70B-Instruct",   # Model identifier
     temperature=0.7,                              # Creativity (0.0-2.0)
-    max_tokens=2000,                              # Response length
-    timeout=30,                                   # Request timeout
+    max_tokens=2000,                              # Response length limit
+    
+    # Reliability & Performance  
+    timeout=30,                                   # Request timeout (seconds)
     max_retries=3,                                # Retry attempts
+    retry_delay=1.0,                              # Initial retry delay
+    streaming=True,                               # Enable real streaming
 )
 ```
 
-### Text LLM Parameters
+### **Available Models**
+
+Check the latest models dynamically:
 
 ```python
-from langchain_iointelligence import IOIntelligenceLLM
+from langchain_iointelligence import IOIntelligenceUtils
 
-llm = IOIntelligenceLLM(
-    api_key="your_key",
-    api_url="https://api.example.com/v1/chat",
-    model="meta-llama/Llama-3.3-70B-Instruct",
-    temperature=0.5,
-    max_tokens=1500,
-)
+utils = IOIntelligenceUtils()
+models = utils.list_models()
+
+for model in models:
+    print(f"Model: {model['id']}")
+    if 'description' in model:
+        print(f"  Description: {model['description']}")
+
+# Get recommended models
+recommended = utils.get_recommended_models()
+print("Recommended models:", recommended)
 ```
+
+Common models include:
+- `meta-llama/Llama-3.3-70B-Instruct` (default, balanced performance)
+- `meta-llama/Llama-3.1-405B-Instruct` (highest capability)
+- `meta-llama/Llama-3.1-70B-Instruct` (fast and efficient)
 
 ## 🔌 API Compatibility
 
-This library supports both OpenAI-compatible API formats:
+**Full OpenAI ChatCompletion API compatibility:**
 
-**Chat Completion Format (Default):**
 ```json
 {
   "model": "meta-llama/Llama-3.3-70B-Instruct",
   "messages": [{"role": "user", "content": "Hello"}],
   "temperature": 0.7,
-  "max_tokens": 1000
+  "max_tokens": 1000,
+  "stream": true,
+  "stop": ["END"]
 }
 ```
 
-**Text Completion Format (Legacy):**
+**Also supports legacy Text Completion format:**
+
 ```json
 {
-  "model": "meta-llama/Llama-3.3-70B-Instruct", 
+  "model": "meta-llama/Llama-3.3-70B-Instruct",
   "prompt": "Hello",
   "temperature": 0.7,
   "max_tokens": 1000
 }
 ```
 
-The library automatically detects and parses both response formats.
+## 🔍 Migration Guides
+
+### **From OpenAI ChatGPT**
+
+```python
+# Before (OpenAI)
+from langchain_openai import ChatOpenAI
+chat = ChatOpenAI(
+    model="gpt-4",
+    temperature=0.7,
+    max_tokens=1000,
+    timeout=30
+)
+
+# After (io Intelligence) - Same parameters!
+from langchain_iointelligence import IOIntelligenceChat
+chat = IOIntelligenceChat(
+    model="meta-llama/Llama-3.3-70B-Instruct",
+    temperature=0.7,
+    max_tokens=1000, 
+    timeout=30
+)
+```
+
+### **From Anthropic Claude**
+
+```python
+# Before (Anthropic)
+from langchain_anthropic import ChatAnthropic
+chat = ChatAnthropic(model="claude-3-sonnet-20240229")
+
+# After (io Intelligence)
+from langchain_iointelligence import IOIntelligenceChat
+chat = IOIntelligenceChat(model="meta-llama/Llama-3.3-70B-Instruct")
+
+# Same interface - no code changes needed!
+response = chat.invoke([HumanMessage(content="Hello")])
+```
 
 ## ✅ Testing
 
 ```bash
+# Install test dependencies
+pip install pytest pytest-cov
+
 # Run all tests
-pytest tests/
+pytest tests/ -v
 
 # Run with coverage
-pytest tests/ --cov=langchain_iointelligence
+pytest tests/ --cov=langchain_iointelligence --cov-report=html
 
-# Run specific test
-pytest tests/test_llm.py::TestIOIntelligenceLLM::test_call_success
+# Test specific functionality
+pytest tests/test_chat.py::TestIOIntelligenceChatModel::test_streaming -v
 ```
 
-## 🛠️ Development Setup
+## 🚀 Advanced Examples
+
+### **Batch Processing with Rate Limit Handling**
+
+```python
+import asyncio
+from langchain_iointelligence import IOIntelligenceChat, IOIntelligenceRateLimitError
+
+async def process_batch(prompts, chat):
+    results = []
+    for prompt in prompts:
+        try:
+            result = await chat.ainvoke(prompt)
+            results.append(result)
+        except IOIntelligenceRateLimitError:
+            await asyncio.sleep(60)  # Wait for rate limit reset
+            result = await chat.ainvoke(prompt)  # Retry
+            results.append(result)
+    return results
+```
+
+### **Custom Retry Logic**
+
+```python
+from langchain_iointelligence import IOIntelligenceChat
+
+# Custom retry configuration
+chat = IOIntelligenceChat(
+    max_retries=5,
+    retry_delay=2.0,  # Start with 2 second delays
+    timeout=60        # Longer timeout for complex requests
+)
+```
+
+### **Model Performance Comparison**
+
+```python
+from langchain_iointelligence import IOIntelligenceChat
+
+models = [
+    "meta-llama/Llama-3.3-70B-Instruct",
+    "meta-llama/Llama-3.1-405B-Instruct",
+    "meta-llama/Llama-3.1-70B-Instruct"
+]
+
+prompt = "Solve this math problem: 2x + 5 = 15"
+
+for model in models:
+    chat = IOIntelligenceChat(model=model)
+    response = chat.invoke(prompt)
+    print(f"Model {model}: {response.content}")
+    print(f"Tokens used: {response.usage_metadata}")
+```
+
+## 🔧 Development
 
 ```bash
-# Clone and install
-git clone https://github.com/yourusername/langchain-iointelligence.git
+# Clone repository
+git clone https://github.com/sou-co/langchain-iointelligence.git
 cd langchain-iointelligence
+
+# Install in development mode
 pip install -e ".[dev]"
 
 # Setup environment
 cp .env.example .env
 # Edit .env with your API credentials
 
-# Code quality
-black langchain_iointelligence/ tests/  # Formatting
-mypy langchain_iointelligence/          # Type checking
-flake8 langchain_iointelligence/        # Linting
+# Code formatting & linting
+black langchain_iointelligence/ tests/
+mypy langchain_iointelligence/
+flake8 langchain_iointelligence/
+
+# Run tests
+pytest tests/ -v
 ```
 
-## 🚀 Production Patterns
+## 📊 Performance & Monitoring
 
-### Error Handling
+### **Usage Tracking**
 
 ```python
-from langchain_iointelligence import IOIntelligenceChat
-from langchain_core.exceptions import OutputParserException
-
 chat = IOIntelligenceChat()
+response = chat.invoke("Analyze market trends")
 
-try:
-    response = chat.invoke("Hello")
-    print(response.content)
-except OutputParserException as e:
-    print(f"API Error: {e}")
-    # Handle gracefully
+# Access detailed usage information
+usage = response.usage_metadata
+print(f"Prompt tokens: {usage.get('prompt_tokens')}")
+print(f"Completion tokens: {usage.get('completion_tokens')}")
+print(f"Total tokens: {usage.get('total_tokens')}")
+print(f"Model used: {response.response_metadata.get('model')}")
 ```
 
-### Retry Strategy
+### **Response Timing**
 
 ```python
-from langchain_iointelligence import IOIntelligenceChat
+import time
 
-# Built-in retry configuration
-chat = IOIntelligenceChat(
-    max_retries=5,
-    timeout=60
-)
+start_time = time.time()
+response = chat.invoke("Complex reasoning task")
+end_time = time.time()
+
+print(f"Response time: {end_time - start_time:.2f} seconds")
+print(f"Tokens per second: {response.usage_metadata['total_tokens'] / (end_time - start_time):.1f}")
 ```
 
-### Multi-Provider Setup
+## 🛡️ Production Best Practices
 
-```python
-# Production-ready multi-provider configuration
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic  
-from langchain_iointelligence import IOIntelligenceChat
-
-# Define provider chain with fallbacks
-primary = IOIntelligenceChat(model="meta-llama/Llama-3.3-70B-Instruct")
-secondary = ChatOpenAI(model="gpt-4")
-tertiary = ChatAnthropic(model="claude-3-sonnet-20240229")
-
-# Chain with multiple fallbacks
-robust_chat = primary.with_fallbacks([secondary, tertiary])
-
-# Use in production
-response = robust_chat.invoke("Process this request")
-```
-
-## 📊 Available Models
-
-Check the io Intelligence API documentation for the latest model list. Common models include:
-
-- `meta-llama/Llama-3.3-70B-Instruct` (default)
-- `meta-llama/Llama-3.1-405B-Instruct`
-- `meta-llama/Llama-3.1-70B-Instruct`
-
-## 🔍 Migration Guide
-
-### From v0.1.0 to v0.1.1+
-
-**Old (Text LLM only):**
-```python
-from langchain_iointelligence import IOIntelligenceLLM
-llm = IOIntelligenceLLM()
-response = llm("Hello")  # String
-```
-
-**New (Recommended Chat Model):**
-```python
-from langchain_iointelligence import IOIntelligenceChat
-from langchain_core.messages import HumanMessage
-
-chat = IOIntelligenceChat()
-response = chat.invoke([HumanMessage(content="Hello")])  # AIMessage
-print(response.content)
-```
-
-### From OpenAI
-
-**OpenAI:**
-```python
-from langchain_openai import ChatOpenAI
-chat = ChatOpenAI(model="gpt-4", temperature=0.7)
-```
-
-**io Intelligence:**
-```python
-from langchain_iointelligence import IOIntelligenceChat
-chat = IOIntelligenceChat(model="meta-llama/Llama-3.3-70B-Instruct", temperature=0.7)
-```
+1. **Always use environment variables** for API keys
+2. **Implement proper fallback chains** for reliability
+3. **Monitor token usage** to control costs
+4. **Use streaming** for better user experience
+5. **Handle rate limits gracefully** with exponential backoff
+6. **Validate models** before deployment
 
 ## 📄 License
 
-MIT License
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Run tests (`pytest tests/`)
+3. Run tests (`pytest tests/ -v`)
 4. Commit changes (`git commit -m 'Add amazing feature'`)
 5. Push to branch (`git push origin feature/amazing-feature`)
 6. Create a Pull Request
 
 ## 📧 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/langchain-iointelligence/issues)
-- **Documentation**: [GitHub Wiki](https://github.com/yourusername/langchain-iointelligence/wiki)
+- **Issues**: [GitHub Issues](https://github.com/sou-co/langchain-iointelligence/issues)
+- **Documentation**: [GitHub Wiki](https://github.com/sou-co/langchain-iointelligence/wiki)
 - **Examples**: See `examples/` directory
+
+---
+
+**🎯 Ready for production use with complete ChatGPT API compatibility and modern LangChain integration!**

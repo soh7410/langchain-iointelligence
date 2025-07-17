@@ -1,21 +1,35 @@
-"""IOIntelligenceChatModel implementation for LangChain."""
+"""Enhanced IOIntelligenceChatModel implementation for LangChain."""
 
 import os
 from typing import Any, Dict, List, Optional, Iterator
-import requests
 from dotenv import load_dotenv
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
-from langchain_core.exceptions import OutputParserException as GenerationError
+from langchain_core.outputs import ChatGeneration, ChatResult, ChatGenerationChunk
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun
+
+try:
+    from .http_client import IOIntelligenceHTTPClient
+    from .streaming import IOIntelligenceStreamer
+    from .exceptions import IOIntelligenceError, IOIntelligenceInvalidResponseError
+    from .utils import IOIntelligenceUtils
+except ImportError:
+    # Fallback for basic functionality if enhanced modules aren't available
+    IOIntelligenceHTTPClient = None
+    IOIntelligenceStreamer = None
+    IOIntelligenceError = Exception
+    IOIntelligenceInvalidResponseError = Exception
+    IOIntelligenceUtils = None
+    
+    import requests
+    from langchain_core.exceptions import OutputParserException as GenerationError
 
 # Load environment variables from .env file
 load_dotenv()
 
 
 class IOIntelligenceChatModel(BaseChatModel):
-    """LangChain ChatModel wrapper for io Intelligence API."""
+    """Enhanced LangChain ChatModel wrapper for io Intelligence API."""
     
     # Declare all fields that will be used
     io_api_key: str = ""
@@ -25,6 +39,8 @@ class IOIntelligenceChatModel(BaseChatModel):
     temperature: float = 0.7
     timeout: int = 30
     max_retries: int = 3
+    retry_delay: float = 1.0
+    streaming: bool = False
     
     def __init__(
         self,
@@ -35,6 +51,8 @@ class IOIntelligenceChatModel(BaseChatModel):
         temperature: float = 0.7,
         timeout: int = 30,
         max_retries: int = 3,
+        retry_delay: float = 1.0,
+        streaming: bool = False,
         **kwargs
     ):
         """Initialize IOIntelligenceChatModel.
@@ -47,6 +65,8 @@ class IOIntelligenceChatModel(BaseChatModel):
             temperature: Temperature for generation (default: 0.7)
             timeout: Request timeout in seconds (default: 30)
             max_retries: Maximum number of retries (default: 3)
+            retry_delay: Initial retry delay in seconds (default: 1.0)
+            streaming: Enable streaming responses (default: False)
         """
         # Extract and set API credentials
         api_key = api_key or os.getenv('IO_API_KEY')
@@ -65,15 +85,57 @@ class IOIntelligenceChatModel(BaseChatModel):
             'max_tokens': max_tokens,
             'temperature': temperature,
             'timeout': timeout,
-            'max_retries': max_retries
+            'max_retries': max_retries,
+            'retry_delay': retry_delay,
+            'streaming': streaming
         })
             
         super().__init__(**kwargs)
+        
+        # Initialize enhanced features if available
+        self._http_client: Optional[Any] = None
+        self._streamer: Optional[Any] = None
+        self._utils: Optional[Any] = None
     
     @property
     def _llm_type(self) -> str:
         """Return identifier of LLM type."""
         return "io_intelligence_chat"
+    
+    @property
+    def http_client(self):
+        """Get or create HTTP client."""
+        if IOIntelligenceHTTPClient and self._http_client is None:
+            self._http_client = IOIntelligenceHTTPClient(
+                api_key=self.io_api_key,
+                api_url=self.io_api_url,
+                timeout=self.timeout,
+                max_retries=self.max_retries,
+                retry_delay=self.retry_delay
+            )
+        return self._http_client
+    
+    @property
+    def streamer(self):
+        """Get or create streaming client."""
+        if IOIntelligenceStreamer and self._streamer is None:
+            self._streamer = IOIntelligenceStreamer(
+                api_key=self.io_api_key,
+                api_url=self.io_api_url,
+                timeout=self.timeout
+            )
+        return self._streamer
+    
+    @property
+    def utils(self):
+        """Get or create utilities client."""
+        if IOIntelligenceUtils and self._utils is None:
+            self._utils = IOIntelligenceUtils(
+                api_key=self.io_api_key,
+                api_url=self.io_api_url,
+                timeout=self.timeout
+            )
+        return self._utils
     
     def _convert_messages_to_api_format(self, messages: List[BaseMessage]) -> List[Dict[str, str]]:
         """Convert LangChain messages to API format."""
@@ -99,29 +161,11 @@ class IOIntelligenceChatModel(BaseChatModel):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> ChatResult:
-        """Run the LLM on the given messages.
-        
-        Args:
-            messages: The messages to pass into the model.
-            stop: Optional list of stop words to use when generating.
-            run_manager: Optional callback manager.
-            **kwargs: Additional keyword arguments.
-            
-        Returns:
-            The ChatResult generated by the model.
-            
-        Raises:
-            GenerationError: If the API request fails.
-        """
-        headers = {
-            "Authorization": f"Bearer {self.io_api_key}",
-            "Content-Type": "application/json",
-        }
-        
+        """Run the LLM on the given messages."""
         # Convert messages to API format
         api_messages = self._convert_messages_to_api_format(messages)
         
-        # io Intelligence API uses OpenAI-compatible format
+        # Prepare request data
         data = {
             "model": self.model,
             "messages": api_messages,
@@ -137,19 +181,16 @@ class IOIntelligenceChatModel(BaseChatModel):
         data.update(kwargs)
         
         try:
-            response = requests.post(
-                self.io_api_url,
-                headers=headers,
-                json=data,
-                timeout=self.timeout
-            )
-            response.raise_for_status()
+            # Use enhanced HTTP client if available, otherwise fallback
+            if self.http_client:
+                response_data = self.http_client.post_with_retry(data)
+            else:
+                response_data = self._fallback_request(data)
             
             # Parse response - supports both Chat and Completion formats
-            response_data = response.json()
-            
             if "choices" not in response_data or not response_data["choices"]:
-                raise GenerationError("No choices in API response")
+                error_class = IOIntelligenceInvalidResponseError if IOIntelligenceInvalidResponseError != Exception else GenerationError
+                raise error_class("No choices in API response")
                 
             choice = response_data["choices"][0]
             
@@ -160,7 +201,10 @@ class IOIntelligenceChatModel(BaseChatModel):
             elif "text" in choice:
                 content = choice["text"]
             else:
-                raise GenerationError("Unsupported response schema - expected 'message.content' or 'text' in choices")
+                error_class = IOIntelligenceInvalidResponseError if IOIntelligenceInvalidResponseError != Exception else GenerationError
+                raise error_class(
+                    "Unsupported response schema - expected 'message.content' or 'text' in choices"
+                )
             
             # Create AIMessage with the response
             message = AIMessage(content=content)
@@ -174,15 +218,78 @@ class IOIntelligenceChatModel(BaseChatModel):
                     "model": self.model,
                     "usage": usage_data,
                     "finish_reason": choice.get("finish_reason"),
+                    "response_id": response_data.get("id"),
+                    "created": response_data.get("created"),
                 }
             )
             
             return ChatResult(generations=[generation])
             
-        except requests.exceptions.RequestException as e:
-            raise GenerationError(f"API request failed: {str(e)}")
-        except (KeyError, IndexError) as e:
-            raise GenerationError(f"Invalid API response format: {str(e)}")
+        except Exception as e:
+            if IOIntelligenceError != Exception:
+                if isinstance(e, IOIntelligenceError):
+                    raise
+                else:
+                    raise IOIntelligenceError(f"Unexpected error: {str(e)}")
+            else:
+                raise GenerationError(f"API request failed: {str(e)}")
+    
+    def _fallback_request(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Fallback HTTP request without enhanced features."""
+        headers = {
+            "Authorization": f"Bearer {self.io_api_key}",
+            "Content-Type": "application/json",
+        }
+        
+        response = requests.post(
+            self.io_api_url,
+            headers=headers,
+            json=data,
+            timeout=self.timeout
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def _stream(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> Iterator[ChatGenerationChunk]:
+        """Stream the LLM on the given messages."""
+        # If streaming is available, use it
+        if self.streamer:
+            api_messages = self._convert_messages_to_api_format(messages)
+            
+            data = {
+                "model": self.model,
+                "messages": api_messages,
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
+                "stream": True,
+            }
+            
+            if stop:
+                data["stop"] = stop
+            data.update(kwargs)
+            
+            try:
+                for chunk in self.streamer.stream_chat_completion(data):
+                    if run_manager:
+                        run_manager.on_llm_new_token(chunk.message.content or "")
+                    yield chunk
+            except Exception as e:
+                error_class = IOIntelligenceError if IOIntelligenceError != Exception else GenerationError
+                raise error_class(f"Streaming error: {str(e)}")
+        else:
+            # Fallback: use non-streaming and yield complete response
+            result = self._generate(messages, stop, run_manager, **kwargs)
+            chunk = ChatGenerationChunk(
+                message=result.generations[0].message,
+                generation_info=result.generations[0].generation_info
+            )
+            yield chunk
     
     @property
     def _identifying_params(self) -> Dict[str, Any]:
@@ -193,21 +300,8 @@ class IOIntelligenceChatModel(BaseChatModel):
             "temperature": self.temperature,
             "timeout": self.timeout,
             "max_retries": self.max_retries,
+            "streaming": self.streaming,
         }
-    
-    # Streaming support (optional - can be added later)
-    def _stream(
-        self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
-        **kwargs: Any,
-    ) -> Iterator[ChatGeneration]:
-        """Stream the LLM on the given messages."""
-        # For now, just use the non-streaming version
-        # This can be enhanced later with actual streaming support
-        result = self._generate(messages, stop, run_manager, **kwargs)
-        yield result.generations[0]
 
 
 # Alias for backward compatibility
