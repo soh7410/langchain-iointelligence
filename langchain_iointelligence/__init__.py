@@ -14,7 +14,7 @@ from .vision import (DEFAULT_VISION_MODEL, MAX_IMAGES_PER_REQUEST,
                      VISION_MODELS, encode_image_to_data_url,
                      image_content_block, vision_message)
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __all__ = [
     "IOIntelligenceLLM",
     "IOIntelligenceChatModel",

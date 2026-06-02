@@ -3,11 +3,12 @@
 import json
 import os
 from operator import itemgetter
-from typing import (Any, Callable, Dict, Iterator, List, Literal, Optional,
-                    Sequence, Type, Union)
+from typing import (Any, AsyncIterator, Callable, Dict, Iterator, List,
+                    Literal, Optional, Sequence, Type, Union)
 
 from dotenv import load_dotenv
-from langchain_core.callbacks.manager import CallbackManagerForLLMRun
+from langchain_core.callbacks.manager import (AsyncCallbackManagerForLLMRun,
+                                              CallbackManagerForLLMRun)
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import (AIMessage, BaseMessage, HumanMessage,
@@ -27,15 +28,18 @@ from langchain_core.utils.pydantic import is_basemodel_subclass
 from pydantic import BaseModel
 
 try:
+    from .async_http_client import IOIntelligenceAsyncHTTPClient
     from .exceptions import (IOIntelligenceError,
                              IOIntelligenceInvalidResponseError)
     from .http_client import IOIntelligenceHTTPClient
-    from .streaming import IOIntelligenceStreamer
+    from .streaming import IOIntelligenceStreamer, build_generation_chunk
     from .utils import IOIntelligenceUtils
 except ImportError:
     # Fallback for basic functionality if enhanced modules aren't available
     IOIntelligenceHTTPClient = None
+    IOIntelligenceAsyncHTTPClient = None
     IOIntelligenceStreamer = None
+    build_generation_chunk = None
     IOIntelligenceError = Exception
     IOIntelligenceInvalidResponseError = Exception
     IOIntelligenceUtils = None
@@ -213,6 +217,7 @@ class IOIntelligenceChatModel(BaseChatModel):
 
         # Initialize enhanced features if available
         self._http_client: Optional[Any] = None
+        self._async_http_client: Optional[Any] = None
         self._streamer: Optional[Any] = None
         self._utils: Optional[Any] = None
 
@@ -233,6 +238,22 @@ class IOIntelligenceChatModel(BaseChatModel):
                 retry_delay=self.retry_delay,
             )
         return self._http_client
+
+    @property
+    def async_http_client(self):
+        """Get or create the async HTTP client."""
+        if (
+            IOIntelligenceAsyncHTTPClient is not None
+            and self._async_http_client is None
+        ):
+            self._async_http_client = IOIntelligenceAsyncHTTPClient(
+                api_key=self.io_api_key,
+                api_url=self.io_api_url,
+                timeout=self.timeout,
+                max_retries=self.max_retries,
+                retry_delay=self.retry_delay,
+            )
+        return self._async_http_client
 
     @property
     def streamer(self):
@@ -263,6 +284,111 @@ class IOIntelligenceChatModel(BaseChatModel):
         """
         return [_convert_message_to_dict(message) for message in messages]
 
+    def _build_request_data(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]],
+        *,
+        stream: bool = False,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Assemble the OpenAI-compatible request payload."""
+        data: Dict[str, Any] = {
+            "model": self.model,
+            "messages": self._convert_messages_to_api_format(messages),
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+        }
+        if stop:
+            data["stop"] = stop
+        if stream:
+            data["stream"] = True
+            # Ask for token usage in the final SSE chunk (caller may override).
+            data.setdefault("stream_options", {"include_usage": True})
+        data.update(kwargs)
+        return data
+
+    def _invalid_response_error(self, message: str) -> Exception:
+        """Build the appropriate invalid-response error instance."""
+        error_class = (
+            IOIntelligenceInvalidResponseError
+            if IOIntelligenceInvalidResponseError != Exception
+            else GenerationError
+        )
+        return error_class(message)
+
+    def _wrap_error(self, error: Exception) -> Exception:
+        """Normalise an arbitrary error into an IOIntelligence error."""
+        if IOIntelligenceError != Exception and isinstance(error, IOIntelligenceError):
+            return error
+        if IOIntelligenceError != Exception:
+            return IOIntelligenceError(f"API request failed: {str(error)}")
+        return GenerationError(f"API request failed: {str(error)}")
+
+    def _create_chat_result(self, response_data: Dict[str, Any]) -> ChatResult:
+        """Parse an API response into a ChatResult (shared by sync and async)."""
+        if "choices" not in response_data or not response_data["choices"]:
+            raise self._invalid_response_error("No choices in API response")
+
+        choice = response_data["choices"][0]
+        tool_calls: List[Dict[str, Any]] = []
+        invalid_tool_calls: List[Dict[str, Any]] = []
+
+        # Chat format: choices[0].message (content and/or tool_calls)
+        if "message" in choice:
+            response_message = choice["message"]
+            content = response_message.get("content") or ""
+            tool_calls, invalid_tool_calls = _parse_response_tool_calls(
+                response_message
+            )
+        # Completion format: choices[0].text
+        elif "text" in choice:
+            content = choice["text"]
+        else:
+            raise self._invalid_response_error(
+                "Unsupported response schema - expected 'message.content' or 'text' in choices"
+            )
+
+        raw_usage = response_data.get("usage") or {}
+        usage_metadata = UsageMetadata(
+            input_tokens=raw_usage.get("prompt_tokens", 0),
+            output_tokens=raw_usage.get("completion_tokens", 0),
+            total_tokens=raw_usage.get("total_tokens", 0),
+        )
+
+        message = AIMessage(
+            content=content,
+            tool_calls=tool_calls,
+            invalid_tool_calls=invalid_tool_calls,
+            usage_metadata=usage_metadata,
+            response_metadata={
+                "token_usage": raw_usage,
+                "model": response_data.get("model", self.model),
+                "finish_reason": choice.get("finish_reason"),
+                "id": response_data.get("id"),
+                "created": response_data.get("created"),
+            },
+        )
+
+        generation = ChatGeneration(
+            message=message,
+            generation_info={
+                "model": self.model,
+                "usage": raw_usage,  # Backward compatibility
+                "finish_reason": choice.get("finish_reason"),
+                "response_id": response_data.get("id"),
+                "created": response_data.get("created"),
+            },
+        )
+
+        return ChatResult(
+            generations=[generation],
+            llm_output={
+                "token_usage": usage_metadata,
+                "model_name": self.model,
+            },
+        )
+
     def _generate(
         self,
         messages: List[BaseMessage],
@@ -271,118 +397,35 @@ class IOIntelligenceChatModel(BaseChatModel):
         **kwargs: Any,
     ) -> ChatResult:
         """Run the LLM on the given messages."""
-        # Convert messages to API format
-        api_messages = self._convert_messages_to_api_format(messages)
-
-        # Prepare request data
-        data = {
-            "model": self.model,
-            "messages": api_messages,
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-        }
-
-        # Add stop words if provided
-        if stop:
-            data["stop"] = stop
-
-        # Add any additional kwargs
-        data.update(kwargs)
-
+        data = self._build_request_data(messages, stop, **kwargs)
         try:
-            # Use enhanced HTTP client if available, otherwise fallback
             if self.http_client is not None:
                 response_data = self.http_client.post_with_retry(data)
             else:
                 response_data = self._fallback_request(data)
-
-            # Parse response - supports both Chat and Completion formats
-            if "choices" not in response_data or not response_data["choices"]:
-                error_class = (
-                    IOIntelligenceInvalidResponseError
-                    if IOIntelligenceInvalidResponseError != Exception
-                    else GenerationError
-                )
-                raise error_class("No choices in API response")
-
-            choice = response_data["choices"][0]
-
-            tool_calls: List[Dict[str, Any]] = []
-            invalid_tool_calls: List[Dict[str, Any]] = []
-
-            # Chat format: choices[0].message (content and/or tool_calls)
-            if "message" in choice:
-                response_message = choice["message"]
-                content = response_message.get("content") or ""
-                tool_calls, invalid_tool_calls = _parse_response_tool_calls(
-                    response_message
-                )
-            # Completion format: choices[0].text
-            elif "text" in choice:
-                content = choice["text"]
-            else:
-                error_class = (
-                    IOIntelligenceInvalidResponseError
-                    if IOIntelligenceInvalidResponseError != Exception
-                    else GenerationError
-                )
-                raise error_class(
-                    "Unsupported response schema - expected 'message.content' or 'text' in choices"
-                )
-
-            # Create AIMessage with the response
-            raw_usage = response_data.get("usage", {})
-
-            # Create LangChain standard UsageMetadata
-            usage_metadata = UsageMetadata(
-                input_tokens=raw_usage.get("prompt_tokens", 0),
-                output_tokens=raw_usage.get("completion_tokens", 0),
-                total_tokens=raw_usage.get("total_tokens", 0),
-            )
-
-            # Create AIMessage with proper usage_metadata and response_metadata
-            message = AIMessage(
-                content=content,
-                tool_calls=tool_calls,
-                invalid_tool_calls=invalid_tool_calls,
-                usage_metadata=usage_metadata,
-                response_metadata={
-                    "token_usage": raw_usage,
-                    "model": response_data.get("model", self.model),
-                    "finish_reason": choice.get("finish_reason"),
-                    "id": response_data.get("id"),
-                    "created": response_data.get("created"),
-                },
-            )
-
-            generation = ChatGeneration(
-                message=message,
-                generation_info={
-                    "model": self.model,
-                    "usage": raw_usage,  # Backward compatibility
-                    "finish_reason": choice.get("finish_reason"),
-                    "response_id": response_data.get("id"),
-                    "created": response_data.get("created"),
-                },
-            )
-
-            return ChatResult(
-                generations=[generation],
-                llm_output={
-                    "token_usage": usage_metadata,
-                    "model_name": self.model,
-                }
-            )
-
+            return self._create_chat_result(response_data)
         except Exception as e:
-            # Re-raise IOIntelligence-specific errors as-is
-            if IOIntelligenceError != Exception and isinstance(e, IOIntelligenceError):
-                raise
-            # Convert other errors to appropriate types with consistent prefix
-            elif IOIntelligenceError != Exception:
-                raise IOIntelligenceError(f"API request failed: {str(e)}")
-            else:
-                raise GenerationError(f"API request failed: {str(e)}")
+            raise self._wrap_error(e)
+
+    async def _agenerate(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        """Asynchronously run the LLM on the given messages (native async)."""
+        if self.async_http_client is None:
+            # No httpx available - fall back to the base thread-pool behaviour.
+            return await super()._agenerate(
+                messages, stop=stop, run_manager=run_manager, **kwargs
+            )
+        data = self._build_request_data(messages, stop, **kwargs)
+        try:
+            response_data = await self.async_http_client.apost_with_retry(data)
+            return self._create_chat_result(response_data)
+        except Exception as e:
+            raise self._wrap_error(e)
 
     def _fallback_request(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Fallback HTTP request without enhanced features."""
@@ -405,19 +448,7 @@ class IOIntelligenceChatModel(BaseChatModel):
         """Stream the LLM on the given messages."""
         # If streaming is available, use it
         if self.streamer:
-            api_messages = self._convert_messages_to_api_format(messages)
-
-            data = {
-                "model": self.model,
-                "messages": api_messages,
-                "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
-                "stream": True,
-            }
-
-            if stop:
-                data["stop"] = stop
-            data.update(kwargs)
+            data = self._build_request_data(messages, stop, stream=True, **kwargs)
 
             try:
                 for chunk in self.streamer.stream_chat_completion(data):
@@ -437,6 +468,34 @@ class IOIntelligenceChatModel(BaseChatModel):
                 generation_info=result.generations[0].generation_info,
             )
             yield chunk
+
+    async def _astream(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ChatGenerationChunk]:
+        """Asynchronously stream the LLM on the given messages (native async)."""
+        if self.async_http_client is None or build_generation_chunk is None:
+            # No httpx available - defer to base async-over-sync streaming.
+            async for chunk in super()._astream(
+                messages, stop=stop, run_manager=run_manager, **kwargs
+            ):
+                yield chunk
+            return
+
+        data = self._build_request_data(messages, stop, stream=True, **kwargs)
+        try:
+            async for raw_chunk in self.async_http_client.astream(data):
+                chunk = build_generation_chunk(raw_chunk)
+                if chunk is None:
+                    continue
+                if run_manager:
+                    await run_manager.on_llm_new_token(chunk.message.content or "")
+                yield chunk
+        except Exception as e:
+            raise self._wrap_error(e)
 
     def bind_tools(
         self,

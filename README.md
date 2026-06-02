@@ -19,7 +19,8 @@
 | ✅ **Vision/Multimodal** | **Supported** | Image input via `vision_message()` on vision models (0.3.0+) |
 | ✅ **Function/Tool Calling** | **Supported** | `bind_tools()` with tool-call parsing + streaming (0.4.0+) |
 | ✅ **Structured Output** | **Supported** | `with_structured_output()` — function calling / json_schema / json_mode (0.4.0+) |
-| ⚠️ **Streaming** | **Basic Support** | SSE token + tool-call chunks; usage-at-end *coming soon* |
+| ✅ **Async** | **Supported** | Native `ainvoke`/`astream`/`abatch` over httpx (0.5.0+) |
+| ✅ **Streaming** | **Supported** | SSE token + tool-call chunks; usage metadata on the final chunk (0.5.0+) |
 | ❌ **Embeddings** | **Not Supported** | Use dedicated embedding providers |
 
 > **Note**: Non-core message roles default to `user`. Usage metadata always includes all required fields (`input_tokens`, `output_tokens`, `total_tokens`) with defaults of 0 when data unavailable.
@@ -216,6 +217,38 @@ Choose how structure is enforced via `method`:
 
 Pass `include_raw=True` to get `{"raw", "parsed", "parsing_error"}` instead of
 raising on a parse failure.
+
+### **Async** ⚡
+
+All async entry points are implemented natively on top of `httpx`
+(`ainvoke`, `astream`, `abatch`, and the `_agenerate`/`_astream` hooks), so the
+model is a first-class citizen in LangServe / LangGraph and concurrent
+pipelines — no thread-pool wrapping.
+
+```python
+import asyncio
+from langchain_iointelligence import IOIntelligenceChatModel
+
+chat = IOIntelligenceChatModel(model="meta-llama/Llama-3.3-70B-Instruct")
+
+async def main():
+    # Single async call
+    resp = await chat.ainvoke("Give me a haiku about the sea.")
+    print(resp.content)
+
+    # Async streaming
+    async for chunk in chat.astream("Count to five."):
+        print(chunk.content, end="", flush=True)
+
+    # Concurrent calls
+    results = await chat.abatch(["Hi", "Hello", "Hey"])
+
+asyncio.run(main())
+```
+
+Streaming responses now also carry token usage: the final chunk includes
+`usage_metadata` (requested via `stream_options.include_usage`), so you can
+account for tokens even when streaming.
 
 ## 🔗 Advanced LangChain Integration
 
