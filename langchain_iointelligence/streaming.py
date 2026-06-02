@@ -106,11 +106,30 @@ class IOIntelligenceStreamer:
             delta = choice.get("delta", {})
 
             # Extract content from delta
-            content = delta.get("content", "")
+            content = delta.get("content") or ""
             finish_reason = choice.get("finish_reason")
 
-            # Create message chunk
-            message_chunk = AIMessageChunk(content=content)
+            # Extract incremental tool-call deltas, if any
+            tool_call_chunks = []
+            for raw_tool_call in delta.get("tool_calls") or []:
+                function = raw_tool_call.get("function", {})
+                tool_call_chunks.append(
+                    {
+                        "name": function.get("name"),
+                        "args": function.get("arguments"),
+                        "id": raw_tool_call.get("id"),
+                        "index": raw_tool_call.get("index"),
+                        "type": "tool_call_chunk",
+                    }
+                )
+
+            # Create message chunk (with tool-call deltas when present)
+            if tool_call_chunks:
+                message_chunk = AIMessageChunk(
+                    content=content, tool_call_chunks=tool_call_chunks
+                )
+            else:
+                message_chunk = AIMessageChunk(content=content)
 
             # Create generation chunk
             generation_chunk = ChatGenerationChunk(
