@@ -5,9 +5,80 @@ from typing import Any, Dict, Iterator, Optional
 
 import requests
 from langchain_core.messages import AIMessageChunk
+from langchain_core.messages.ai import UsageMetadata
 from langchain_core.outputs import ChatGenerationChunk
 
 from .exceptions import IOIntelligenceError, classify_api_error
+
+
+def build_generation_chunk(
+    chunk_data: Dict[str, Any]
+) -> Optional[ChatGenerationChunk]:
+    """Build a ChatGenerationChunk from a raw SSE chunk dict.
+
+    Shared by the sync streamer and the async stream so both paths produce
+    identical chunks (content deltas, tool-call deltas, and the final
+    usage-only chunk emitted when ``stream_options.include_usage`` is set).
+    """
+    try:
+        choices = chunk_data.get("choices") or []
+        usage = chunk_data.get("usage")
+
+        # Final usage-only chunk (no choices) - surface token usage.
+        if not choices:
+            if usage:
+                usage_metadata = UsageMetadata(
+                    input_tokens=usage.get("prompt_tokens", 0),
+                    output_tokens=usage.get("completion_tokens", 0),
+                    total_tokens=usage.get("total_tokens", 0),
+                )
+                return ChatGenerationChunk(
+                    message=AIMessageChunk(content="", usage_metadata=usage_metadata),
+                    generation_info={
+                        "model": chunk_data.get("model"),
+                        "chunk_id": chunk_data.get("id"),
+                    },
+                )
+            return None
+
+        choice = choices[0]
+        delta = choice.get("delta", {})
+
+        content = delta.get("content") or ""
+        finish_reason = choice.get("finish_reason")
+
+        # Incremental tool-call deltas, if any.
+        tool_call_chunks = []
+        for raw_tool_call in delta.get("tool_calls") or []:
+            function = raw_tool_call.get("function", {})
+            tool_call_chunks.append(
+                {
+                    "name": function.get("name"),
+                    "args": function.get("arguments"),
+                    "id": raw_tool_call.get("id"),
+                    "index": raw_tool_call.get("index"),
+                    "type": "tool_call_chunk",
+                }
+            )
+
+        if tool_call_chunks:
+            message_chunk = AIMessageChunk(
+                content=content, tool_call_chunks=tool_call_chunks
+            )
+        else:
+            message_chunk = AIMessageChunk(content=content)
+
+        return ChatGenerationChunk(
+            message=message_chunk,
+            generation_info={
+                "finish_reason": finish_reason,
+                "model": chunk_data.get("model"),
+                "chunk_id": chunk_data.get("id"),
+            },
+        )
+
+    except (KeyError, TypeError):
+        return None
 
 
 class IOIntelligenceStreamer:
@@ -91,60 +162,10 @@ class IOIntelligenceStreamer:
     def _create_chat_chunk(self, chunk_data: Dict[str, Any]) -> Optional[ChatGenerationChunk]:
         """Create ChatGenerationChunk from API chunk data.
 
-        Args:
-            chunk_data: Raw chunk data from API
-
-        Returns:
-            ChatGenerationChunk or None if invalid
+        Thin wrapper around :func:`build_generation_chunk` (kept for backward
+        compatibility / instance-level access).
         """
-        try:
-            choices = chunk_data.get("choices", [])
-            if not choices:
-                return None
-
-            choice = choices[0]
-            delta = choice.get("delta", {})
-
-            # Extract content from delta
-            content = delta.get("content") or ""
-            finish_reason = choice.get("finish_reason")
-
-            # Extract incremental tool-call deltas, if any
-            tool_call_chunks = []
-            for raw_tool_call in delta.get("tool_calls") or []:
-                function = raw_tool_call.get("function", {})
-                tool_call_chunks.append(
-                    {
-                        "name": function.get("name"),
-                        "args": function.get("arguments"),
-                        "id": raw_tool_call.get("id"),
-                        "index": raw_tool_call.get("index"),
-                        "type": "tool_call_chunk",
-                    }
-                )
-
-            # Create message chunk (with tool-call deltas when present)
-            if tool_call_chunks:
-                message_chunk = AIMessageChunk(
-                    content=content, tool_call_chunks=tool_call_chunks
-                )
-            else:
-                message_chunk = AIMessageChunk(content=content)
-
-            # Create generation chunk
-            generation_chunk = ChatGenerationChunk(
-                message=message_chunk,
-                generation_info={
-                    "finish_reason": finish_reason,
-                    "model": chunk_data.get("model"),
-                    "chunk_id": chunk_data.get("id"),
-                },
-            )
-
-            return generation_chunk
-
-        except (KeyError, TypeError):
-            return None
+        return build_generation_chunk(chunk_data)
 
 
 def stream_text_from_chunks(chunks: Iterator[ChatGenerationChunk]) -> Iterator[str]:

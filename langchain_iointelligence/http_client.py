@@ -66,6 +66,11 @@ class IOIntelligenceHTTPClient:
 
                 return response.json()
 
+            except IOIntelligenceError:
+                # Classified API errors must propagate as-is; they subclass
+                # ValueError, so they would otherwise be swallowed by the
+                # JSON-decode handler below.
+                raise
             except requests.exceptions.Timeout:
                 last_exception = IOIntelligenceTimeoutError(
                     f"Request timeout after {self.timeout} seconds"
