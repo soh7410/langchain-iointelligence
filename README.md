@@ -16,9 +16,9 @@
 | ✅ **Sync Generation** | **Fully Supported** | Standard text generation with token usage tracking |
 | ✅ **Error Handling** | **Production Ready** | Comprehensive error classification and retry logic |
 | ✅ **Token Usage** | **Fully Supported** | `response.usage_metadata` access (0.2.0+) |
+| ✅ **Vision/Multimodal** | **Supported** | Image input via `vision_message()` on vision models (0.3.0+) |
 | ⚠️ **Streaming** | **Basic Support** | SSE token chunks; usage-at-end *coming soon* |
 | ❌ **Function/Tool Calling** | **Not Supported** | Planned for future release |
-| ❌ **Vision/Multimodal** | **Not Supported** | Text-only interface currently |
 | ❌ **Embeddings** | **Not Supported** | Use dedicated embedding providers |
 
 > **Note**: Non-core message roles default to `user`. Usage metadata always includes all required fields (`input_tokens`, `output_tokens`, `total_tokens`) with defaults of 0 when data unavailable.
@@ -33,6 +33,7 @@
 * **🛡️ Production-Grade Reliability**: Automatic retries, detailed error classification, and robust fallbacks
 * **🔀 Runtime Provider Switching**: Easy switching between OpenAI, Anthropic, and io Intelligence
 * **📊 LangChain Token Tracking**: Standard `usage_metadata` with `input_tokens`/`output_tokens`/`total_tokens`
+* **🖼️ Vision / Multimodal**: Image input on vision models via the `vision_message()` helper (URLs, local files, bytes)
 * **🎛️ Modern LangChain Integration**: Full support for `prompt | llm | parser` chains
 
 ## ⚙️ Installation
@@ -100,6 +101,62 @@ print("Available models:", models)
 if is_model_available("meta-llama/Llama-3.3-70B-Instruct"):
     print("Model is available!")
 ```
+
+### **Vision / Multimodal (Image Input)** 🖼️
+
+io Intelligence offers OpenAI-compatible **vision models** that accept images
+alongside text, through the same chat endpoint. Use the `vision_message()`
+helper to attach images from remote URLs, local files, or raw bytes — base64
+data URLs are built automatically.
+
+```python
+from langchain_iointelligence import (
+    IOIntelligenceChatModel,
+    vision_message,
+    VISION_MODELS,
+    DEFAULT_VISION_MODEL,
+)
+
+# Pick a vision-capable model (see VISION_MODELS for the full list)
+chat = IOIntelligenceChatModel(model=DEFAULT_VISION_MODEL)
+
+# 1) Remote image URL
+message = vision_message(
+    "What is in this image?",
+    "https://example.com/photo.jpg",
+)
+print(chat.invoke([message]).content)
+
+# 2) Local file (auto base64-encoded into a data URL)
+message = vision_message("Describe this diagram", "./diagram.png")
+
+# 3) Raw bytes
+message = vision_message("What's shown here?", image_bytes)
+
+# 4) Multiple images (up to 10) + optional detail hint
+message = vision_message(
+    "Compare these two products",
+    ["./a.jpg", "https://example.com/b.png"],
+    detail="high",
+)
+```
+
+**Available vision models** (always confirm with `list_available_models()`):
+
+| Model | Provider |
+|-------|----------|
+| `meta-llama/Llama-3.2-90B-Vision-Instruct` (default) | Meta |
+| `meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8` | Meta |
+| `Qwen/Qwen2.5-VL-32B-Instruct` | Qwen |
+| `Qwen/Qwen2-VL-7B-Instruct` | Qwen |
+
+> **Limits:** up to 10 images per request, min 512×512, max 20 MB each.
+> Remote image URLs must be publicly accessible.
+
+You can also build content blocks manually with `image_content_block()` or
+encode a file yourself with `encode_image_to_data_url()`. Any LangChain-standard
+multimodal `HumanMessage` (a list of `text` / `image_url` content blocks) is
+passed through unchanged, so existing OpenAI-style vision code works as-is.
 
 ## 🔗 Advanced LangChain Integration
 
@@ -259,8 +316,14 @@ print("Recommended models:", recommended)
 
 Common models include:
 - `meta-llama/Llama-3.3-70B-Instruct` (default, balanced performance)
-- `meta-llama/Llama-3.1-405B-Instruct` (highest capability)
-- `meta-llama/Llama-3.1-70B-Instruct` (fast and efficient)
+- `deepseek-ai/DeepSeek-R1-0528` (reasoning)
+- `Qwen/Qwen3-235B-A22B-Thinking-2507` (high capability)
+
+**Vision-capable models** (for image input — see the [Vision section](#vision--multimodal-image-input-)):
+- `meta-llama/Llama-3.2-90B-Vision-Instruct`
+- `meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8`
+- `Qwen/Qwen2.5-VL-32B-Instruct`
+- `Qwen/Qwen2-VL-7B-Instruct`
 
 ## 🔌 API Compatibility
 

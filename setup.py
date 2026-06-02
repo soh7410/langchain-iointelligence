@@ -7,7 +7,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="langchain-iointelligence",
-    version="0.2.0",
+    version="0.3.0",
     author="SOH",
     author_email="sousohsou1@gmail.com",
     description="LangChain wrapper for io Intelligence LLM API",
