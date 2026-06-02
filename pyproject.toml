@@ -51,6 +51,14 @@ dev = [
     "isort>=5.10.0",
     "mypy>=0.991",
 ]
+# LangChain standard compliance suite. Kept out of `dev` (and the main test
+# matrix) on purpose: the 1.x line of langchain-tests requires Python >=3.10
+# and pulls langchain-core 1.x, which would mask the package's declared
+# langchain-core>=0.2.0 floor. Pinned to the 0.3 line and run in a dedicated
+# CI job so the main matrix keeps exercising the supported dependency range.
+test-standard = [
+    "langchain-tests>=0.3,<1",
+]
 
 [project.urls]
 Homepage = "https://github.com/soh7410/langchain-iointelligence"
