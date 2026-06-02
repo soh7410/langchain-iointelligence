@@ -10,8 +10,11 @@ from .exceptions import (IOIntelligenceAPIError,
 from .llm import IOIntelligenceLLM
 from .utils import (IOIntelligenceUtils, is_model_available,
                     list_available_models)
+from .vision import (DEFAULT_VISION_MODEL, MAX_IMAGES_PER_REQUEST,
+                     VISION_MODELS, encode_image_to_data_url,
+                     image_content_block, vision_message)
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = [
     "IOIntelligenceLLM",
     "IOIntelligenceChatModel",
@@ -27,4 +30,11 @@ __all__ = [
     "IOIntelligenceUtils",
     "list_available_models",
     "is_model_available",
+    # Vision / multimodal helpers
+    "vision_message",
+    "image_content_block",
+    "encode_image_to_data_url",
+    "VISION_MODELS",
+    "DEFAULT_VISION_MODEL",
+    "MAX_IMAGES_PER_REQUEST",
 ]
