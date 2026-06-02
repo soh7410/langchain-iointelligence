@@ -42,3 +42,29 @@ jobs:
         IO_API_URL: https://test.example.com/v1/chat/completions
       run: |
         pytest -v
+
+  standard-compliance:
+    # LangChain standard test suite, isolated from the main matrix so its
+    # langchain-tests/langchain-core closure doesn't affect the supported-range
+    # jobs above. Runs on a single modern Python.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,test-standard]"
+
+    - name: Run standard compliance tests
+      env:
+        IO_API_KEY: test_api_key_for_github_actions
+        IO_API_URL: https://test.example.com/v1/chat/completions
+      run: |
+        pytest tests/test_standard.py -v
