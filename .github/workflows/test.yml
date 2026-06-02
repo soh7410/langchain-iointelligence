@@ -1,4 +1,4 @@
-name: Minimal Tests
+name: Tests
 
 on:
   push:
@@ -9,27 +9,36 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
-    
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -e ".[dev]"
-    
-    - name: Quick lint check (critical errors only)
+
+    - name: Lint (critical errors)
       run: |
         flake8 langchain_iointelligence/ --select=E9,F63,F7,F82 --show-source
-    
+
+    - name: Lint (style, non-blocking)
+      run: |
+        flake8 langchain_iointelligence/ tests/ || true
+
     - name: Run tests
       env:
         IO_API_KEY: test_api_key_for_github_actions
         IO_API_URL: https://test.example.com/v1/chat/completions
       run: |
-        pytest tests/test_llm.py tests/test_chat.py -v
+        pytest -v
