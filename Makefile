@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-cov lint format type-check clean build upload
+.PHONY: help install install-dev test test-cov lint format type-check clean build upload upload-test check-all
 
 help:
 	@echo "Available commands:"
@@ -12,6 +12,7 @@ help:
 	@echo "  clean         Clean build artifacts"
 	@echo "  build         Build package"
 	@echo "  upload        Upload package to PyPI"
+	@echo "  upload-test   Upload package to TestPyPI"
 
 install:
 	pip install -e .
@@ -45,10 +46,13 @@ clean:
 	find . -type f -name "*.pyc" -delete
 
 build: clean
-	python setup.py sdist bdist_wheel
+	python -m build
 
 upload: build
 	twine upload dist/*
+
+upload-test: build
+	twine upload --repository testpypi dist/*
 
 check-all: format lint type-check test-cov
 	@echo "All checks passed!"
