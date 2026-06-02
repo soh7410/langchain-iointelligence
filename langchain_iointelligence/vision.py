@@ -56,15 +56,27 @@ _MIME_SIGNATURES = (
 )
 
 
-def _sniff_mime(data: bytes) -> str:
-    """Best-effort detection of an image MIME type from magic bytes."""
+# Generic MIME used only when neither magic bytes nor extension are conclusive.
+_FALLBACK_MIME = "image/jpeg"
+
+_EXT_MIME = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "gif": "image/gif",
+    "webp": "image/webp",
+    "bmp": "image/bmp",
+}
+
+
+def _sniff_mime(data: bytes) -> Optional[str]:
+    """Detect an image MIME type from magic bytes, or ``None`` if unknown."""
     for signature, mime in _MIME_SIGNATURES:
         if data.startswith(signature):
             if mime == "image/webp" and data[8:12] != b"WEBP":
                 continue
             return mime
-    # Fall back to a generic type; the API can usually still decode it.
-    return "image/jpeg"
+    return None
 
 
 def encode_image_to_data_url(
@@ -77,8 +89,8 @@ def encode_image_to_data_url(
     Args:
         image: Path to a local image file, or the raw image bytes.
         mime_type: Optional MIME type override (e.g. ``"image/png"``).
-            When omitted it is inferred from the file extension or the
-            image's magic bytes.
+            When omitted the type is inferred from the image's magic bytes
+            first, then the file extension, falling back to ``image/jpeg``.
 
     Returns:
         A ``data:<mime>;base64,<payload>`` URL string suitable for use as
@@ -86,23 +98,15 @@ def encode_image_to_data_url(
     """
     if isinstance(image, (bytes, bytearray)):
         raw = bytes(image)
-        mime = mime_type or _sniff_mime(raw)
+        # Magic bytes are authoritative for raw bytes (no filename to consult).
+        mime = mime_type or _sniff_mime(raw) or _FALLBACK_MIME
     else:
         path = Path(image)
         raw = path.read_bytes()
-        if mime_type:
-            mime = mime_type
-        else:
-            ext = path.suffix.lower().lstrip(".")
-            ext_map = {
-                "jpg": "image/jpeg",
-                "jpeg": "image/jpeg",
-                "png": "image/png",
-                "gif": "image/gif",
-                "webp": "image/webp",
-                "bmp": "image/bmp",
-            }
-            mime = ext_map.get(ext) or _sniff_mime(raw)
+        ext = path.suffix.lower().lstrip(".")
+        # Trust the actual content over the (possibly wrong) filename
+        # extension, e.g. a PNG renamed to ".jpg" or an extension-less temp file.
+        mime = mime_type or _sniff_mime(raw) or _EXT_MIME.get(ext) or _FALLBACK_MIME
 
     encoded = base64.b64encode(raw).decode("ascii")
     return f"data:{mime};base64,{encoded}"
@@ -124,14 +128,25 @@ def image_content_block(
             * raw image ``bytes``,
             * an already-built content block ``dict`` (passed through).
         detail: Optional OpenAI-style detail hint (e.g. ``"low"``/``"high"``).
+            For a pre-built ``image_url`` block it is applied on top, unless the
+            block already specifies its own ``detail``.
         mime_type: Optional MIME override used when encoding local files/bytes.
 
     Returns:
         A content block dict, e.g.
         ``{"type": "image_url", "image_url": {"url": ...}}``.
     """
-    # Already a content block -> trust the caller.
+    # Already a content block -> trust the caller, but still honour an
+    # explicit ``detail`` hint so mixed inputs stay consistent.
     if isinstance(image, dict):
+        if detail is None:
+            return image
+        inner = image.get("image_url")
+        # Only inject into image_url blocks that don't already pin a detail.
+        if isinstance(inner, dict) and "detail" not in inner:
+            merged = dict(image)
+            merged["image_url"] = {**inner, "detail": detail}
+            return merged
         return image
 
     if isinstance(image, (bytes, bytearray)):

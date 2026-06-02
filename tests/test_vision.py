@@ -46,6 +46,19 @@ class TestImageContentBlock:
         raw = {"type": "image_url", "image_url": {"url": "https://x/y.png"}}
         assert image_content_block(raw) is raw
 
+    def test_dict_detail_injected(self):
+        raw = {"type": "image_url", "image_url": {"url": "https://x/y.png"}}
+        block = image_content_block(raw, detail="low")
+        assert block["image_url"]["detail"] == "low"
+        # Caller's dict must not be mutated.
+        assert "detail" not in raw["image_url"]
+
+    def test_dict_existing_detail_preserved(self):
+        raw = {"type": "image_url", "image_url": {"url": "https://x/y.png", "detail": "high"}}
+        block = image_content_block(raw, detail="low")
+        assert block["image_url"]["detail"] == "high"
+        assert block is raw
+
     def test_bytes_encoded_as_data_url(self):
         block = image_content_block(_PNG_BYTES)
         url = block["image_url"]["url"]
@@ -67,9 +80,23 @@ class TestEncodeImageToDataUrl:
         payload = url.split(",", 1)[1]
         assert base64.b64decode(payload) == _PNG_BYTES
 
-    def test_path_extension_mime(self, tmp_path):
+    def test_content_overrides_wrong_extension(self, tmp_path):
+        # A PNG renamed to .jpg must be reported as PNG (content wins).
         p = tmp_path / "photo.jpg"
-        p.write_bytes(_PNG_BYTES)  # extension drives mime, not content
+        p.write_bytes(_PNG_BYTES)
+        url = encode_image_to_data_url(p)
+        assert url.startswith("data:image/png;base64,")
+
+    def test_extension_used_when_content_unknown(self, tmp_path):
+        # Unrecognised bytes -> fall back to the filename extension.
+        p = tmp_path / "mystery.webp"
+        p.write_bytes(b"not a real image payload")
+        url = encode_image_to_data_url(p)
+        assert url.startswith("data:image/webp;base64,")
+
+    def test_fallback_mime_when_all_unknown(self, tmp_path):
+        p = tmp_path / "blob.bin"
+        p.write_bytes(b"\x00\x01\x02\x03")
         url = encode_image_to_data_url(p)
         assert url.startswith("data:image/jpeg;base64,")
 
@@ -114,6 +141,17 @@ class TestVisionMessage:
         )
         assert msg.content[1]["image_url"]["detail"] == "low"
         assert msg.content[2]["image_url"]["detail"] == "low"
+
+    def test_detail_applied_to_mixed_dict_and_url(self):
+        prebuilt = {"type": "image_url", "image_url": {"url": "https://example.com/a.jpg"}}
+        msg = vision_message(
+            "x",
+            [prebuilt, "https://example.com/b.jpg"],
+            detail="high",
+        )
+        # Both the prebuilt block and the URL input get the hint.
+        assert msg.content[1]["image_url"]["detail"] == "high"
+        assert msg.content[2]["image_url"]["detail"] == "high"
 
 
 class TestVisionWithChatModel:
