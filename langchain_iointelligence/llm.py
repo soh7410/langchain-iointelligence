@@ -13,7 +13,12 @@ load_dotenv()
 
 
 class IOIntelligenceLLM(LLM):
-    """LangChain LLM wrapper for io Intelligence API."""
+    """LangChain LLM wrapper for io Intelligence API.
+
+    This is the text-in/text-out interface. For image input (vision models)
+    use :class:`~langchain_iointelligence.IOIntelligenceChatModel` together
+    with :func:`~langchain_iointelligence.vision_message`.
+    """
 
     # Declare all fields that will be used
     io_api_key: str = ""
