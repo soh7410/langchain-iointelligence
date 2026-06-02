@@ -1,6 +1,6 @@
 # Runtime dependencies (kept in sync with pyproject.toml [project].dependencies).
 # For development tooling install the package with its extras instead:
 #   pip install -e ".[dev]"
-langchain-core>=0.1.0
+langchain-core>=0.2.0
 requests>=2.25.0
 python-dotenv>=0.19.0

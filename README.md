@@ -17,8 +17,9 @@
 | ✅ **Error Handling** | **Production Ready** | Comprehensive error classification and retry logic |
 | ✅ **Token Usage** | **Fully Supported** | `response.usage_metadata` access (0.2.0+) |
 | ✅ **Vision/Multimodal** | **Supported** | Image input via `vision_message()` on vision models (0.3.0+) |
-| ⚠️ **Streaming** | **Basic Support** | SSE token chunks; usage-at-end *coming soon* |
-| ❌ **Function/Tool Calling** | **Not Supported** | Planned for future release |
+| ✅ **Function/Tool Calling** | **Supported** | `bind_tools()` with tool-call parsing + streaming (0.4.0+) |
+| ✅ **Structured Output** | **Supported** | `with_structured_output()` — function calling / json_schema / json_mode (0.4.0+) |
+| ⚠️ **Streaming** | **Basic Support** | SSE token + tool-call chunks; usage-at-end *coming soon* |
 | ❌ **Embeddings** | **Not Supported** | Use dedicated embedding providers |
 
 > **Note**: Non-core message roles default to `user`. Usage metadata always includes all required fields (`input_tokens`, `output_tokens`, `total_tokens`) with defaults of 0 when data unavailable.
@@ -157,6 +158,64 @@ You can also build content blocks manually with `image_content_block()` or
 encode a file yourself with `encode_image_to_data_url()`. Any LangChain-standard
 multimodal `HumanMessage` (a list of `text` / `image_url` content blocks) is
 passed through unchanged, so existing OpenAI-style vision code works as-is.
+
+### **Tool / Function Calling** 🛠️
+
+Bind tools with `bind_tools()`; tool calls are parsed into the standard
+`AIMessage.tool_calls`, so the model drops straight into LangGraph / agent
+workflows. Works with `@tool` functions, Pydantic models, `BaseTool`
+instances, plain functions, or raw OpenAI tool dicts.
+
+```python
+from langchain_core.tools import tool
+from langchain_iointelligence import IOIntelligenceChatModel
+
+@tool
+def get_weather(location: str) -> str:
+    """Get the current weather for a location."""
+    return f"It's sunny in {location}."
+
+chat = IOIntelligenceChatModel(model="meta-llama/Llama-3.3-70B-Instruct")
+llm_with_tools = chat.bind_tools([get_weather])
+
+ai_msg = llm_with_tools.invoke("What's the weather in Tokyo?")
+for call in ai_msg.tool_calls:
+    print(call["name"], call["args"])   # get_weather {'location': 'Tokyo'}
+```
+
+`tool_choice` accepts `"auto"` / `"none"` / `"required"` (or `True`), a specific
+tool name, or an explicit OpenAI `tool_choice` dict. Multi-turn tool
+conversations (assistant `tool_calls` → `ToolMessage` results) round-trip
+correctly, and tool-call deltas are also surfaced when streaming.
+
+### **Structured Output** 🧱
+
+`with_structured_output()` returns a runnable that parses the response into your
+schema (a Pydantic model, TypedDict, or JSON-schema dict).
+
+```python
+from pydantic import BaseModel, Field
+from langchain_iointelligence import IOIntelligenceChatModel
+
+class Person(BaseModel):
+    name: str = Field(..., description="Full name")
+    age: int = Field(..., description="Age in years")
+
+chat = IOIntelligenceChatModel(model="meta-llama/Llama-3.3-70B-Instruct")
+structured = chat.with_structured_output(Person)          # default: function_calling
+
+person = structured.invoke("Jane Doe is 32 years old.")
+print(person.name, person.age)                            # Jane Doe 32
+```
+
+Choose how structure is enforced via `method`:
+
+- `"function_calling"` (default) — forces a tool call shaped like the schema.
+- `"json_schema"` — uses the API's `response_format` json_schema (strict).
+- `"json_mode"` — requests a generic JSON object (describe the schema in your prompt).
+
+Pass `include_raw=True` to get `{"raw", "parsed", "parsing_error"}` instead of
+raising on a parse failure.
 
 ## 🔗 Advanced LangChain Integration
 
