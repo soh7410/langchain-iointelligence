@@ -27,26 +27,11 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 from langchain_core.utils.pydantic import is_basemodel_subclass
 from pydantic import BaseModel
 
-try:
-    from .async_http_client import IOIntelligenceAsyncHTTPClient
-    from .exceptions import (IOIntelligenceError,
-                             IOIntelligenceInvalidResponseError)
-    from .http_client import IOIntelligenceHTTPClient
-    from .streaming import IOIntelligenceStreamer, build_generation_chunk
-    from .utils import IOIntelligenceUtils
-except ImportError:
-    # Fallback for basic functionality if enhanced modules aren't available
-    IOIntelligenceHTTPClient = None
-    IOIntelligenceAsyncHTTPClient = None
-    IOIntelligenceStreamer = None
-    build_generation_chunk = None
-    IOIntelligenceError = Exception
-    IOIntelligenceInvalidResponseError = Exception
-    IOIntelligenceUtils = None
-
-    import requests
-    from langchain_core.exceptions import \
-        OutputParserException as GenerationError
+from .async_http_client import IOIntelligenceAsyncHTTPClient
+from .exceptions import IOIntelligenceError, IOIntelligenceInvalidResponseError
+from .http_client import IOIntelligenceHTTPClient
+from .streaming import IOIntelligenceStreamer, build_generation_chunk
+from .utils import IOIntelligenceUtils
 
 # Load environment variables from .env file
 load_dotenv()
@@ -229,7 +214,7 @@ class IOIntelligenceChatModel(BaseChatModel):
     @property
     def http_client(self):
         """Get or create HTTP client."""
-        if IOIntelligenceHTTPClient is not None and self._http_client is None:
+        if self._http_client is None:
             self._http_client = IOIntelligenceHTTPClient(
                 api_key=self.io_api_key,
                 api_url=self.io_api_url,
@@ -242,10 +227,7 @@ class IOIntelligenceChatModel(BaseChatModel):
     @property
     def async_http_client(self):
         """Get or create the async HTTP client."""
-        if (
-            IOIntelligenceAsyncHTTPClient is not None
-            and self._async_http_client is None
-        ):
+        if self._async_http_client is None:
             self._async_http_client = IOIntelligenceAsyncHTTPClient(
                 api_key=self.io_api_key,
                 api_url=self.io_api_url,
@@ -258,7 +240,7 @@ class IOIntelligenceChatModel(BaseChatModel):
     @property
     def streamer(self):
         """Get or create streaming client."""
-        if IOIntelligenceStreamer and self._streamer is None:
+        if self._streamer is None:
             self._streamer = IOIntelligenceStreamer(
                 api_key=self.io_api_key, api_url=self.io_api_url, timeout=self.timeout
             )
@@ -267,7 +249,7 @@ class IOIntelligenceChatModel(BaseChatModel):
     @property
     def utils(self):
         """Get or create utilities client."""
-        if IOIntelligenceUtils and self._utils is None:
+        if self._utils is None:
             self._utils = IOIntelligenceUtils(
                 api_key=self.io_api_key, api_url=self.io_api_url, timeout=self.timeout
             )
@@ -310,20 +292,13 @@ class IOIntelligenceChatModel(BaseChatModel):
 
     def _invalid_response_error(self, message: str) -> Exception:
         """Build the appropriate invalid-response error instance."""
-        error_class = (
-            IOIntelligenceInvalidResponseError
-            if IOIntelligenceInvalidResponseError != Exception
-            else GenerationError
-        )
-        return error_class(message)
+        return IOIntelligenceInvalidResponseError(message)
 
     def _wrap_error(self, error: Exception) -> Exception:
         """Normalise an arbitrary error into an IOIntelligence error."""
-        if IOIntelligenceError != Exception and isinstance(error, IOIntelligenceError):
+        if isinstance(error, IOIntelligenceError):
             return error
-        if IOIntelligenceError != Exception:
-            return IOIntelligenceError(f"API request failed: {str(error)}")
-        return GenerationError(f"API request failed: {str(error)}")
+        return IOIntelligenceError(f"API request failed: {str(error)}")
 
     def _create_chat_result(self, response_data: Dict[str, Any]) -> ChatResult:
         """Parse an API response into a ChatResult (shared by sync and async)."""
@@ -399,10 +374,7 @@ class IOIntelligenceChatModel(BaseChatModel):
         """Run the LLM on the given messages."""
         data = self._build_request_data(messages, stop, **kwargs)
         try:
-            if self.http_client is not None:
-                response_data = self.http_client.post_with_retry(data)
-            else:
-                response_data = self._fallback_request(data)
+            response_data = self.http_client.post_with_retry(data)
             return self._create_chat_result(response_data)
         except Exception as e:
             raise self._wrap_error(e)
@@ -415,28 +387,12 @@ class IOIntelligenceChatModel(BaseChatModel):
         **kwargs: Any,
     ) -> ChatResult:
         """Asynchronously run the LLM on the given messages (native async)."""
-        if self.async_http_client is None:
-            # No httpx available - fall back to the base thread-pool behaviour.
-            return await super()._agenerate(
-                messages, stop=stop, run_manager=run_manager, **kwargs
-            )
         data = self._build_request_data(messages, stop, **kwargs)
         try:
             response_data = await self.async_http_client.apost_with_retry(data)
             return self._create_chat_result(response_data)
         except Exception as e:
             raise self._wrap_error(e)
-
-    def _fallback_request(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Fallback HTTP request without enhanced features."""
-        headers = {
-            "Authorization": f"Bearer {self.io_api_key}",
-            "Content-Type": "application/json",
-        }
-
-        response = requests.post(self.io_api_url, headers=headers, json=data, timeout=self.timeout)
-        response.raise_for_status()
-        return response.json()
 
     def _stream(
         self,
@@ -446,28 +402,15 @@ class IOIntelligenceChatModel(BaseChatModel):
         **kwargs: Any,
     ) -> Iterator[ChatGenerationChunk]:
         """Stream the LLM on the given messages."""
-        # If streaming is available, use it
-        if self.streamer:
-            data = self._build_request_data(messages, stop, stream=True, **kwargs)
+        data = self._build_request_data(messages, stop, stream=True, **kwargs)
 
-            try:
-                for chunk in self.streamer.stream_chat_completion(data):
-                    if run_manager:
-                        run_manager.on_llm_new_token(chunk.message.content or "")
-                    yield chunk
-            except Exception as e:
-                error_class = (
-                    IOIntelligenceError if IOIntelligenceError != Exception else GenerationError
-                )
-                raise error_class(f"API request failed: Streaming error - {str(e)}")
-        else:
-            # Fallback: use non-streaming and yield complete response
-            result = self._generate(messages, stop, run_manager, **kwargs)
-            chunk = ChatGenerationChunk(
-                message=result.generations[0].message,
-                generation_info=result.generations[0].generation_info,
-            )
-            yield chunk
+        try:
+            for chunk in self.streamer.stream_chat_completion(data):
+                if run_manager:
+                    run_manager.on_llm_new_token(chunk.message.content or "")
+                yield chunk
+        except Exception as e:
+            raise IOIntelligenceError(f"API request failed: Streaming error - {str(e)}")
 
     async def _astream(
         self,
@@ -477,14 +420,6 @@ class IOIntelligenceChatModel(BaseChatModel):
         **kwargs: Any,
     ) -> AsyncIterator[ChatGenerationChunk]:
         """Asynchronously stream the LLM on the given messages (native async)."""
-        if self.async_http_client is None or build_generation_chunk is None:
-            # No httpx available - defer to base async-over-sync streaming.
-            async for chunk in super()._astream(
-                messages, stop=stop, run_manager=run_manager, **kwargs
-            ):
-                yield chunk
-            return
-
         data = self._build_request_data(messages, stop, stream=True, **kwargs)
         try:
             async for raw_chunk in self.async_http_client.astream(data):

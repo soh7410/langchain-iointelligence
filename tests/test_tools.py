@@ -1,6 +1,6 @@
 """Tests for tool/function calling and structured output."""
 
-from unittest.mock import patch
+from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -157,11 +157,9 @@ class TestBindTools:
 
     def test_invoke_parses_tool_calls(self):
         chat = _model()
-        with patch.object(
-            IOIntelligenceChatModel, "http_client", None
-        ), patch.object(
-            chat, "_fallback_request", return_value=_tool_call_response()
-        ):
+        mock_client = Mock()
+        mock_client.post_with_retry.return_value = _tool_call_response()
+        with patch.object(type(chat), "http_client", new_callable=PropertyMock, return_value=mock_client):
             result = chat.bind_tools([GetWeather]).invoke(
                 [HumanMessage(content="weather in Tokyo?")]
             )
@@ -176,11 +174,9 @@ class TestStructuredOutput:
     def test_function_calling_pydantic(self):
         chat = _model()
         runnable = chat.with_structured_output(GetWeather)
-        with patch.object(
-            IOIntelligenceChatModel, "http_client", None
-        ), patch.object(
-            chat, "_fallback_request", return_value=_tool_call_response()
-        ):
+        mock_client = Mock()
+        mock_client.post_with_retry.return_value = _tool_call_response()
+        with patch.object(type(chat), "http_client", new_callable=PropertyMock, return_value=mock_client):
             out = runnable.invoke([HumanMessage(content="weather in Tokyo?")])
         assert isinstance(out, GetWeather)
         assert out.location == "Tokyo"
@@ -227,9 +223,9 @@ class TestStructuredOutput:
             "usage": {},
         }
         runnable = chat.with_structured_output(GetWeather, method="json_schema")
-        with patch.object(
-            IOIntelligenceChatModel, "http_client", None
-        ), patch.object(chat, "_fallback_request", return_value=json_resp):
+        mock_client = Mock()
+        mock_client.post_with_retry.return_value = json_resp
+        with patch.object(type(chat), "http_client", new_callable=PropertyMock, return_value=mock_client):
             out = runnable.invoke([HumanMessage(content="x")])
         assert isinstance(out, GetWeather)
         assert out.location == "Tokyo"
@@ -237,9 +233,9 @@ class TestStructuredOutput:
     def test_include_raw(self):
         chat = _model()
         runnable = chat.with_structured_output(GetWeather, include_raw=True)
-        with patch.object(
-            IOIntelligenceChatModel, "http_client", None
-        ), patch.object(chat, "_fallback_request", return_value=_tool_call_response()):
+        mock_client = Mock()
+        mock_client.post_with_retry.return_value = _tool_call_response()
+        with patch.object(type(chat), "http_client", new_callable=PropertyMock, return_value=mock_client):
             out = runnable.invoke([HumanMessage(content="x")])
         assert set(out.keys()) == {"raw", "parsed", "parsing_error"}
         assert isinstance(out["parsed"], GetWeather)
