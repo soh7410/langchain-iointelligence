@@ -32,9 +32,9 @@ jobs:
       run: |
         flake8 langchain_iointelligence/ --select=E9,F63,F7,F82 --show-source
 
-    - name: Lint (style, non-blocking)
+    - name: Lint (style)
       run: |
-        flake8 langchain_iointelligence/ tests/ || true
+        flake8 langchain_iointelligence/ tests/
 
     - name: Run tests
       env:

@@ -1,7 +1,6 @@
 """Test cases for vision (multimodal) helpers."""
 
 import base64
-from pathlib import Path
 
 import pytest
 from langchain_core.messages import HumanMessage

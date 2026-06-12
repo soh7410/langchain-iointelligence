@@ -4,7 +4,7 @@ import json
 import os
 from operator import itemgetter
 from typing import (Any, AsyncIterator, Callable, Dict, Iterator, List,
-                    Literal, Optional, Sequence, Type, Union)
+                    Literal, Optional, Sequence, Union)
 
 from dotenv import load_dotenv
 from langchain_core.callbacks.manager import (AsyncCallbackManagerForLLMRun,
