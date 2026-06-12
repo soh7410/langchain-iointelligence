@@ -1,6 +1,7 @@
 """Streaming support for io Intelligence API."""
 
 import json
+import logging
 from typing import Any, Dict, Iterator, Optional
 
 import requests
@@ -9,6 +10,8 @@ from langchain_core.messages.ai import UsageMetadata
 from langchain_core.outputs import ChatGenerationChunk
 
 from .exceptions import IOIntelligenceError, classify_api_error
+
+logger = logging.getLogger(__name__)
 
 
 def build_generation_chunk(
@@ -156,7 +159,7 @@ class IOIntelligenceStreamer:
                     continue
                 except Exception as e:
                     # Log error but continue streaming
-                    print(f"Warning: Error processing chunk: {e}")
+                    logger.warning("Error processing chunk: %s", e)
                     continue
 
     def _create_chat_chunk(self, chunk_data: Dict[str, Any]) -> Optional[ChatGenerationChunk]:
