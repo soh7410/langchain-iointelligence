@@ -26,4 +26,5 @@ def disable_dotenv():
     """dotenvの読み込みを無効化"""
     with patch("langchain_iointelligence.llm.load_dotenv"):
         with patch("langchain_iointelligence.chat.load_dotenv"):
-            yield
+            with patch("langchain_iointelligence.utils.load_dotenv"):
+                yield

@@ -1,5 +1,7 @@
 """IOIntelligence specific exceptions for better error handling."""
 
+from typing import Optional
+
 from langchain_core.exceptions import OutputParserException as GenerationError
 
 
@@ -12,7 +14,7 @@ class IOIntelligenceError(GenerationError):
 class IOIntelligenceAPIError(IOIntelligenceError):
     """General API error."""
 
-    def __init__(self, message: str, status_code: int = None, response_text: str = None):
+    def __init__(self, message: str, status_code: Optional[int] = None, response_text: Optional[str] = None):
         super().__init__(message)
         self.status_code = status_code
         self.response_text = response_text
