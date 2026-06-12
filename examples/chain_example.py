@@ -2,8 +2,7 @@
 
 
 from dotenv import load_dotenv
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 
 from langchain_iointelligence.llm import IOIntelligenceLLM
 
@@ -27,7 +26,7 @@ def main():
     )
 
     # Create a chain
-    chain = LLMChain(llm=llm, prompt=prompt_template)
+    chain = prompt_template | llm
 
     # Test data
     test_cases = [
@@ -41,7 +40,7 @@ def main():
 
     for i, case in enumerate(test_cases, 1):
         try:
-            result = chain.run(**case)
+            result = chain.invoke(case)
             print(f"{i}. {case['adjective'].title()} {case['topic']} joke:")
             print(f"   {result.strip()}")
             print()

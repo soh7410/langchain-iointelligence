@@ -2,8 +2,7 @@
 
 
 from dotenv import load_dotenv
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 
 from langchain_iointelligence.llm import IOIntelligenceLLM
 
@@ -20,21 +19,21 @@ def main():
     configs = [
         {
             "name": "Creative Writer",
-            "model": "gpt-4",
+            "model": "meta-llama/Llama-3.3-70B-Instruct",
             "max_tokens": 300,
             "temperature": 0.9,
             "prompt": "Write a creative short story about {topic} in exactly 2 paragraphs.",
         },
         {
             "name": "Technical Explainer",
-            "model": "gpt-3.5-turbo",
+            "model": "deepseek-ai/DeepSeek-R1-0528",
             "max_tokens": 200,
             "temperature": 0.2,
             "prompt": "Explain {topic} in simple, technical terms suitable for beginners.",
         },
         {
             "name": "Conversational Assistant",
-            "model": "default",
+            "model": "Qwen/Qwen3-235B-A22B-Thinking-2507",
             "max_tokens": 150,
             "temperature": 0.5,
             "prompt": "Have a friendly conversation about {topic}. Ask one follow-up question.",
@@ -61,7 +60,7 @@ def main():
         prompt_template = PromptTemplate.from_template(config["prompt"])
 
         # Create chain
-        chain = LLMChain(llm=llm, prompt=prompt_template)
+        chain = prompt_template | llm
 
         # Test with first topic
         topic = topics[0]
@@ -69,7 +68,7 @@ def main():
         print("🤖 Response:")
 
         try:
-            result = chain.run(topic=topic)
+            result = chain.invoke({"topic": topic})
             print(result.strip())
         except Exception as e:
             print(f"❌ Error: {e}")

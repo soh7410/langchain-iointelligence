@@ -352,7 +352,7 @@ try:
     print(f"Success! Used {response.usage_metadata['total_tokens']} tokens")
     
 except IOIntelligenceRateLimitError as e:
-    print(f"Rate limited: {e}. Retry after: {e.retry_after}")
+    print(f"Rate limited: {e}")
     
 except IOIntelligenceServerError as e:
     print(f"Server error {e.status_code}: {e}")
