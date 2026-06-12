@@ -1,7 +1,7 @@
 """IOIntelligenceLLM implementation for LangChain."""
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import requests
 from dotenv import load_dotenv
@@ -116,11 +116,11 @@ class IOIntelligenceLLM(LLM):
 
             # Chat format: choices[0].message.content
             if "message" in choice and "content" in choice["message"]:
-                return choice["message"]["content"]
+                return cast(str, choice["message"]["content"])
 
             # Completion format: choices[0].text
             if "text" in choice:
-                return choice["text"]
+                return cast(str, choice["text"])
 
             raise GenerationError(
                 "Unsupported response schema - expected 'message.content' or 'text' in choices"

@@ -4,7 +4,7 @@ import json
 import os
 from operator import itemgetter
 from typing import (Any, AsyncIterator, Callable, Dict, Iterator, List,
-                    Literal, Optional, Sequence, Union)
+                    Literal, Mapping, Optional, Sequence, Type, Union, cast)
 
 from dotenv import load_dotenv
 from langchain_core.callbacks.manager import (AsyncCallbackManagerForLLMRun,
@@ -12,7 +12,8 @@ from langchain_core.callbacks.manager import (AsyncCallbackManagerForLLMRun,
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import (AIMessage, BaseMessage, HumanMessage,
-                                     SystemMessage, ToolMessage)
+                                     InvalidToolCall, SystemMessage,
+                                     ToolCall, ToolMessage)
 from langchain_core.messages.ai import UsageMetadata
 from langchain_core.output_parsers import (JsonOutputParser,
                                            PydanticOutputParser)
@@ -37,7 +38,7 @@ from .utils import IOIntelligenceUtils
 load_dotenv()
 
 
-def _lc_tool_call_to_openai(tool_call: Dict[str, Any]) -> Dict[str, Any]:
+def _lc_tool_call_to_openai(tool_call: Mapping[str, Any]) -> Dict[str, Any]:
     """Convert a LangChain ToolCall dict to the OpenAI tool_call wire format."""
     return {
         "id": tool_call.get("id"),
@@ -84,13 +85,13 @@ def _convert_message_to_dict(message: BaseMessage) -> Dict[str, Any]:
 
 def _parse_response_tool_calls(message: Dict[str, Any]) -> tuple:
     """Parse raw OpenAI tool_calls into LangChain (valid, invalid) lists."""
-    tool_calls: List[Dict[str, Any]] = []
-    invalid_tool_calls: List[Dict[str, Any]] = []
+    tool_calls: List[ToolCall] = []
+    invalid_tool_calls: List[InvalidToolCall] = []
     for raw_tool_call in message.get("tool_calls") or []:
         try:
             parsed = parse_tool_call(raw_tool_call, return_id=True)
             if parsed is not None:
-                tool_calls.append(parsed)
+                tool_calls.append(cast(ToolCall, parsed))
         except Exception as exc:  # noqa: BLE001 - surfaced as invalid tool call
             invalid_tool_calls.append(
                 make_invalid_tool_call(raw_tool_call, str(exc))
@@ -427,7 +428,10 @@ class IOIntelligenceChatModel(BaseChatModel):
                 if chunk is None:
                     continue
                 if run_manager:
-                    await run_manager.on_llm_new_token(chunk.message.content or "")
+                    content = chunk.message.content
+                    await run_manager.on_llm_new_token(
+                        content if isinstance(content, str) else ""
+                    )
                 yield chunk
         except Exception as e:
             raise self._wrap_error(e)
@@ -496,7 +500,7 @@ class IOIntelligenceChatModel(BaseChatModel):
             llm = self.bind_tools([schema], tool_choice=tool_name)
             if is_pydantic_schema:
                 output_parser: Runnable = PydanticToolsParser(
-                    tools=[schema], first_tool_only=True
+                    tools=[cast(Type[BaseModel], schema)], first_tool_only=True
                 )
             else:
                 output_parser = JsonOutputKeyToolsParser(
@@ -514,14 +518,14 @@ class IOIntelligenceChatModel(BaseChatModel):
             }
             llm = self.bind(response_format=response_format)
             output_parser = (
-                PydanticOutputParser(pydantic_object=schema)
+                PydanticOutputParser(pydantic_object=cast(Type[BaseModel], schema))
                 if is_pydantic_schema
                 else JsonOutputParser()
             )
         elif method == "json_mode":
             llm = self.bind(response_format={"type": "json_object"})
             output_parser = (
-                PydanticOutputParser(pydantic_object=schema)
+                PydanticOutputParser(pydantic_object=cast(Type[BaseModel], schema))
                 if is_pydantic_schema
                 else JsonOutputParser()
             )

@@ -210,7 +210,7 @@ def vision_message(
             f"per request, got {len(image_list)}"
         )
 
-    content: List[Dict[str, Any]] = [{"type": "text", "text": text}]
+    content: List[Union[str, Dict[str, Any]]] = [{"type": "text", "text": text}]
     for img in image_list:
         content.append(
             image_content_block(img, detail=detail, mime_type=mime_type)

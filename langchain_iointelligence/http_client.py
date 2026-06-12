@@ -1,7 +1,7 @@
 """HTTP client with retry logic for io Intelligence API."""
 
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import requests
 
@@ -42,7 +42,7 @@ class IOIntelligenceHTTPClient:
 
     def post_with_retry(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Post request with automatic retry logic."""
-        last_exception = None
+        last_exception: Optional[IOIntelligenceError] = None
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -64,7 +64,8 @@ class IOIntelligenceHTTPClient:
 
                     raise error
 
-                return response.json()
+                result: Dict[str, Any] = response.json()
+                return result
 
             except IOIntelligenceError:
                 # Classified API errors must propagate as-is; they subclass

@@ -2,11 +2,12 @@
 
 import json
 import logging
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 import requests
 from langchain_core.messages import AIMessageChunk
 from langchain_core.messages.ai import UsageMetadata
+from langchain_core.messages.tool import ToolCallChunk
 from langchain_core.outputs import ChatGenerationChunk
 
 from .exceptions import IOIntelligenceError, classify_api_error
@@ -51,17 +52,17 @@ def build_generation_chunk(
         finish_reason = choice.get("finish_reason")
 
         # Incremental tool-call deltas, if any.
-        tool_call_chunks = []
+        tool_call_chunks: List[ToolCallChunk] = []
         for raw_tool_call in delta.get("tool_calls") or []:
             function = raw_tool_call.get("function", {})
             tool_call_chunks.append(
-                {
-                    "name": function.get("name"),
-                    "args": function.get("arguments"),
-                    "id": raw_tool_call.get("id"),
-                    "index": raw_tool_call.get("index"),
-                    "type": "tool_call_chunk",
-                }
+                ToolCallChunk(
+                    name=function.get("name"),
+                    args=function.get("arguments"),
+                    id=raw_tool_call.get("id"),
+                    index=raw_tool_call.get("index"),
+                    type="tool_call_chunk",
+                )
             )
 
         if tool_call_chunks:
@@ -181,7 +182,7 @@ def stream_text_from_chunks(chunks: Iterator[ChatGenerationChunk]) -> Iterator[s
         String content from each chunk
     """
     for chunk in chunks:
-        if chunk.message and chunk.message.content:
+        if chunk.message and isinstance(chunk.message.content, str) and chunk.message.content:
             yield chunk.message.content
 
 
@@ -196,7 +197,7 @@ def accumulate_stream(chunks: Iterator[ChatGenerationChunk]) -> str:
     """
     accumulated = []
     for chunk in chunks:
-        if chunk.message and chunk.message.content:
+        if chunk.message and isinstance(chunk.message.content, str) and chunk.message.content:
             accumulated.append(chunk.message.content)
 
     return "".join(accumulated)

@@ -64,8 +64,9 @@ class IOIntelligenceUtils:
             data = response.json()
 
             # Handle OpenAI-compatible format
-            if "data" in data:
-                return data["data"]
+            if isinstance(data, dict) and "data" in data:
+                models: List[Dict[str, Any]] = data["data"]
+                return models
             # Handle direct list format
             elif isinstance(data, list):
                 return data
@@ -123,7 +124,7 @@ class IOIntelligenceUtils:
         """
         try:
             models = self.list_models()
-            recommended = []
+            recommended: List[str] = []
 
             # Look for common high-quality models
             preferred_patterns = [
@@ -138,12 +139,13 @@ class IOIntelligenceUtils:
                 model_id = model.get("id", "").lower()
                 for pattern in preferred_patterns:
                     if pattern in model_id:
-                        recommended.append(model.get("id"))
+                        if model.get("id"):
+                            recommended.append(model["id"])
                         break
 
             # If no specific patterns found, return first few models
             if not recommended and models:
-                recommended = [m.get("id") for m in models[:3] if m.get("id")]
+                recommended = [m["id"] for m in models[:3] if m.get("id")]
 
             return recommended
 
@@ -171,7 +173,7 @@ def list_available_models(
     """
     utils = IOIntelligenceUtils(api_key, api_url)
     models = utils.list_models()
-    return [model.get("id") for model in models if model.get("id")]
+    return [model["id"] for model in models if model.get("id")]
 
 
 # Convenience function for model validation

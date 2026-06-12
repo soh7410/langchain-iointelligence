@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from typing import Any, AsyncIterator, Dict
+from typing import Any, AsyncIterator, Dict, Optional
 
 import httpx
 
@@ -35,7 +35,7 @@ class IOIntelligenceAsyncHTTPClient:
 
     async def apost_with_retry(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Async POST with automatic retry on rate-limit/server/network errors."""
-        last_exception = None
+        last_exception: Optional[IOIntelligenceError] = None
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -57,7 +57,8 @@ class IOIntelligenceAsyncHTTPClient:
                         continue
                     raise error
 
-                return response.json()
+                result: Dict[str, Any] = response.json()
+                return result
 
             except IOIntelligenceError:
                 # Classified API errors (auth/client/non-retryable server) must
