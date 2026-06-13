@@ -32,6 +32,29 @@ class IOIntelligenceAsyncHTTPClient:
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
+        self._client: Optional[httpx.AsyncClient] = None
+        self._client_loop: Optional[asyncio.AbstractEventLoop] = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return a pooled client bound to the running event loop."""
+        loop = asyncio.get_running_loop()
+        if (
+            self._client is None
+            or self._client.is_closed
+            or self._client_loop is not loop
+        ):
+            # A client from a dead/different loop cannot be closed here safely;
+            # drop the reference and let GC handle the sockets.
+            self._client = httpx.AsyncClient(timeout=self.timeout)
+            self._client_loop = loop
+        return self._client
+
+    async def aclose(self) -> None:
+        """Close the pooled client (if any)."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+        self._client = None
+        self._client_loop = None
 
     async def apost_with_retry(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Async POST with automatic retry on rate-limit/server/network errors."""
@@ -39,10 +62,10 @@ class IOIntelligenceAsyncHTTPClient:
 
         for attempt in range(self.max_retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    response = await client.post(
-                        self.api_url, headers=self._headers, json=data
-                    )
+                client = self._get_client()
+                response = await client.post(
+                    self.api_url, headers=self._headers, json=data
+                )
 
                 if response.status_code >= 400:
                     error = classify_api_error(response.status_code, response.text)
@@ -91,25 +114,25 @@ class IOIntelligenceAsyncHTTPClient:
         """Async stream of parsed SSE chunk dicts from the chat endpoint."""
         headers = {**self._headers, "Accept": "text/event-stream"}
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                async with client.stream(
-                    "POST", self.api_url, headers=headers, json=data
-                ) as response:
-                    if response.status_code >= 400:
-                        body = await response.aread()
-                        text = body.decode() if isinstance(body, bytes) else str(body)
-                        raise classify_api_error(response.status_code, text)
+            client = self._get_client()
+            async with client.stream(
+                "POST", self.api_url, headers=headers, json=data
+            ) as response:
+                if response.status_code >= 400:
+                    body = await response.aread()
+                    text = body.decode() if isinstance(body, bytes) else str(body)
+                    raise classify_api_error(response.status_code, text)
 
-                    async for line in response.aiter_lines():
-                        if not line or not line.startswith("data: "):
-                            continue
-                        payload = line[6:].strip()
-                        if payload == "[DONE]":
-                            break
-                        try:
-                            yield json.loads(payload)
-                        except json.JSONDecodeError:
-                            continue
+                async for line in response.aiter_lines():
+                    if not line or not line.startswith("data: "):
+                        continue
+                    payload = line[6:].strip()
+                    if payload == "[DONE]":
+                        break
+                    try:
+                        yield json.loads(payload)
+                    except json.JSONDecodeError:
+                        continue
         except httpx.TimeoutException:
             raise IOIntelligenceTimeoutError(
                 f"Request timeout after {self.timeout} seconds"

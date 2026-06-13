@@ -547,6 +547,18 @@ class IOIntelligenceChatModel(BaseChatModel):
             return RunnableMap(raw=llm) | parser_with_fallback
         return llm | output_parser
 
+    def close(self) -> None:
+        """Close the cached synchronous HTTP session (if one was created)."""
+        if self._http_client is not None:
+            self._http_client.close()
+            self._http_client = None
+
+    async def aclose(self) -> None:
+        """Close the cached async HTTP client (if one was created)."""
+        if self._async_http_client is not None:
+            await self._async_http_client.aclose()
+            self._async_http_client = None
+
     @property
     def _identifying_params(self) -> Dict[str, Any]:
         """Return a dictionary of identifying parameters."""
