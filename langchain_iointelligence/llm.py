@@ -3,10 +3,12 @@
 import os
 from typing import Any, Dict, List, Optional, cast
 
-import requests
 from dotenv import load_dotenv
 from langchain_core.exceptions import OutputParserException as GenerationError
 from langchain_core.language_models.llms import LLM
+
+from .exceptions import IOIntelligenceError
+from .http_client import IOIntelligenceHTTPClient
 
 # Load environment variables from .env file
 load_dotenv()
@@ -18,6 +20,10 @@ class IOIntelligenceLLM(LLM):
     This is the text-in/text-out interface. For image input (vision models)
     use :class:`~langchain_iointelligence.IOIntelligenceChatModel` together
     with :func:`~langchain_iointelligence.vision_message`.
+
+    As of 0.6.0, requests are routed through :class:`IOIntelligenceHTTPClient`
+    which adds exponential-backoff retries and classified exception types
+    (all subclasses of ``GenerationError`` for backward compatibility).
     """
 
     # Declare all fields that will be used
@@ -26,6 +32,9 @@ class IOIntelligenceLLM(LLM):
     model: str = "meta-llama/Llama-3.3-70B-Instruct"
     max_tokens: int = 1000
     temperature: float = 0.7
+    timeout: int = 30
+    max_retries: int = 3
+    retry_delay: float = 1.0
 
     def __init__(self, api_key: Optional[str] = None, api_url: Optional[str] = None, **kwargs):
         """Initialize IOIntelligenceLLM.
@@ -36,6 +45,9 @@ class IOIntelligenceLLM(LLM):
             model: Model name to use (default: "meta-llama/Llama-3.3-70B-Instruct")
             max_tokens: Maximum tokens to generate (default: 1000)
             temperature: Temperature for generation (default: 0.7)
+            timeout: Request timeout in seconds (default: 30)
+            max_retries: Maximum number of retries (default: 3)
+            retry_delay: Initial retry delay in seconds (default: 1.0)
         """
         # Extract and set API credentials
         api_key = api_key or os.getenv("IO_API_KEY")
@@ -56,10 +68,25 @@ class IOIntelligenceLLM(LLM):
 
         super().__init__(**kwargs)
 
+        self._http_client: Optional[Any] = None
+
     @property
     def _llm_type(self) -> str:
         """Return identifier of LLM type."""
         return "io_intelligence"
+
+    @property
+    def http_client(self):
+        """Get or create HTTP client."""
+        if self._http_client is None:
+            self._http_client = IOIntelligenceHTTPClient(
+                api_key=self.io_api_key,
+                api_url=self.io_api_url,
+                timeout=self.timeout,
+                max_retries=self.max_retries,
+                retry_delay=self.retry_delay,
+            )
+        return self._http_client
 
     def _call(
         self,
@@ -82,13 +109,8 @@ class IOIntelligenceLLM(LLM):
         Raises:
             GenerationError: If the API request fails.
         """
-        headers = {
-            "Authorization": f"Bearer {self.io_api_key}",
-            "Content-Type": "application/json",
-        }
-
         # io Intelligence API uses OpenAI-compatible format
-        data = {
+        data: Dict[str, Any] = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": self.temperature,
@@ -103,11 +125,7 @@ class IOIntelligenceLLM(LLM):
         data.update(kwargs)
 
         try:
-            response = requests.post(self.io_api_url, headers=headers, json=data, timeout=30)
-            response.raise_for_status()
-
-            # Parse response - supports both Chat and Completion formats
-            response_data = response.json()
+            response_data = self.http_client.post_with_retry(data)
 
             if "choices" not in response_data or not response_data["choices"]:
                 raise GenerationError("No choices in API response")
@@ -126,8 +144,8 @@ class IOIntelligenceLLM(LLM):
                 "Unsupported response schema - expected 'message.content' or 'text' in choices"
             )
 
-        except requests.exceptions.RequestException as e:
-            raise GenerationError(f"API request failed: {str(e)}")
+        except IOIntelligenceError:
+            raise
         except (KeyError, IndexError) as e:
             raise GenerationError(f"Invalid API response format: {str(e)}")
 

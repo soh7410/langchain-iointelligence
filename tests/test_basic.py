@@ -1,6 +1,6 @@
 """Simple test without langsmith dependencies."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, PropertyMock
 
 
 # Skip langsmith-related tests
@@ -21,24 +21,21 @@ def test_llm_initialization():
     assert llm._llm_type == "io_intelligence"
 
 
-@patch("langchain_iointelligence.llm.requests.post")
-def test_basic_call(mock_post):
+def test_basic_call():
     """Test basic API call."""
     from langchain_iointelligence.llm import IOIntelligenceLLM
 
-    # Mock successful response
-    mock_response = Mock()
-    mock_response.raise_for_status.return_value = None
-    mock_response.json.return_value = {"choices": [{"text": "Test response"}]}
-    mock_post.return_value = mock_response
-
     llm = IOIntelligenceLLM(api_key="test_key", api_url="https://test.api.com/v1/completions")
 
-    result = llm._call("Test prompt")
-    assert result == "Test response"
+    mock_client = Mock()
+    mock_client.post_with_retry.return_value = {"choices": [{"text": "Test response"}]}
+
+    with patch.object(type(llm), "http_client", new_callable=PropertyMock, return_value=mock_client):
+        result = llm._call("Test prompt")
+        assert result == "Test response"
 
 
 if __name__ == "__main__":
     test_basic_import()
     test_llm_initialization()
-    print("✅ Basic tests passed!")
+    print("Basic tests passed!")
