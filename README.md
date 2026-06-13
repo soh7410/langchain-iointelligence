@@ -250,6 +250,14 @@ Streaming responses now also carry token usage: the final chunk includes
 `usage_metadata` (requested via `stream_options.include_usage`), so you can
 account for tokens even when streaming.
 
+Connections are pooled per event loop (0.6.0+). Long-running services can
+release cached connections explicitly:
+
+```python
+chat.close()          # sync session
+await chat.aclose()   # pooled async client
+```
+
 ## 🔗 Advanced LangChain Integration
 
 ### **Modern Chain with Full Pipeline**
@@ -409,7 +417,11 @@ print("Recommended models:", recommended)
 Common models include:
 - `meta-llama/Llama-3.3-70B-Instruct` (default, balanced performance)
 - `deepseek-ai/DeepSeek-R1-0528` (reasoning)
-- `Qwen/Qwen3-235B-A22B-Thinking-2507` (high capability)
+- `zai-org/GLM-5` (high capability)
+
+> `get_recommended_models()` queries the live catalog and (since 0.6.0)
+> raises an `IOIntelligenceError` if the API call fails instead of
+> silently returning a stale built-in list.
 
 **Vision-capable models** (for image input — see the [Vision section](#vision--multimodal-image-input-)):
 - `meta-llama/Llama-3.2-90B-Vision-Instruct`
@@ -531,6 +543,10 @@ chat = IOIntelligenceChat(
     timeout=60        # Longer timeout for complex requests
 )
 ```
+
+Since 0.6.0 the text-completion `IOIntelligenceLLM` accepts the same
+`timeout` / `max_retries` / `retry_delay` parameters and uses the same
+retrying HTTP client under the hood.
 
 ### **Model Performance Comparison**
 

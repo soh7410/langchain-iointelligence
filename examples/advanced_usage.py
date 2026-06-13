@@ -33,7 +33,7 @@ def main():
         },
         {
             "name": "Conversational Assistant",
-            "model": "Qwen/Qwen3-235B-A22B-Thinking-2507",
+            "model": "Qwen/Qwen3.6-35B-A3B",
             "max_tokens": 150,
             "temperature": 0.5,
             "prompt": "Have a friendly conversation about {topic}. Ask one follow-up question.",
