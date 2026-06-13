@@ -170,34 +170,3 @@ class IOIntelligenceStreamer:
         compatibility / instance-level access).
         """
         return build_generation_chunk(chunk_data)
-
-
-def stream_text_from_chunks(chunks: Iterator[ChatGenerationChunk]) -> Iterator[str]:
-    """Extract text content from streaming chunks.
-
-    Args:
-        chunks: Iterator of ChatGenerationChunk objects
-
-    Yields:
-        String content from each chunk
-    """
-    for chunk in chunks:
-        if chunk.message and isinstance(chunk.message.content, str) and chunk.message.content:
-            yield chunk.message.content
-
-
-def accumulate_stream(chunks: Iterator[ChatGenerationChunk]) -> str:
-    """Accumulate all streaming chunks into final text.
-
-    Args:
-        chunks: Iterator of ChatGenerationChunk objects
-
-    Returns:
-        Complete accumulated text
-    """
-    accumulated = []
-    for chunk in chunks:
-        if chunk.message and isinstance(chunk.message.content, str) and chunk.message.content:
-            accumulated.append(chunk.message.content)
-
-    return "".join(accumulated)
