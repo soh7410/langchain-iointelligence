@@ -121,41 +121,38 @@ class IOIntelligenceUtils:
 
         Returns:
             List of recommended model identifiers
+
+        Raises:
+            IOIntelligenceError: If the model listing API request fails
+                (same contract as :meth:`list_models`). Prior to 0.6.0 this
+                method silently returned a stale hard-coded list on failure.
         """
-        try:
-            models = self.list_models()
-            recommended: List[str] = []
+        models = self.list_models()
+        recommended: List[str] = []
 
-            # Look for common high-quality models
-            preferred_patterns = [
-                "llama-3.3-70b",
-                "llama-3.1-405b",
-                "llama-3.1-70b",
-                "llama-3-70b",
-                "mixtral-8x7b",
-            ]
+        # Current-generation flagship models (checked against the live
+        # catalog 2026-06). The live API remains the source of truth.
+        preferred_patterns = [
+            "glm-5",
+            "deepseek-v4-pro",
+            "kimi-k2.6",
+            "qwen3.6-35b",
+            "llama-3.3-70b",
+        ]
 
-            for model in models:
-                model_id = model.get("id", "").lower()
-                for pattern in preferred_patterns:
-                    if pattern in model_id:
-                        if model.get("id"):
-                            recommended.append(model["id"])
-                        break
+        for model in models:
+            model_id = model.get("id", "").lower()
+            for pattern in preferred_patterns:
+                if pattern in model_id:
+                    if model.get("id"):
+                        recommended.append(model["id"])
+                    break
 
-            # If no specific patterns found, return first few models
-            if not recommended and models:
-                recommended = [m["id"] for m in models[:3] if m.get("id")]
+        # If no specific patterns found, return first few models
+        if not recommended and models:
+            recommended = [m["id"] for m in models[:3] if m.get("id")]
 
-            return recommended
-
-        except Exception:
-            # Fallback to known good models
-            return [
-                "meta-llama/Llama-3.3-70B-Instruct",
-                "meta-llama/Llama-3.1-405B-Instruct",
-                "meta-llama/Llama-3.1-70B-Instruct",
-            ]
+        return recommended
 
 
 # Convenience function for quick model listing
